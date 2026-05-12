@@ -16,10 +16,10 @@ Minimal database for running openfold3
 
 Weekly Variant Structural Prediction Pipeline Flow
 Updated Process Flow:
-•	Automated SQL queries against ref_sys database to identify high-priority variants (deduplication checks against existing protein_modeling entries)  
-•	Automated submission to OpenFold3 for structure prediction
-•	HA1 domain extraction, optimization by rosetta relaxation protocols for energy minimization (energy optimization enforcement for relaxed structures)
-•	Comprehensive logging and audit trails, error handling with retry mechanisms
+ -	Automated SQL queries against ref_sys database to identify high-priority variants (deduplication checks against existing protein_modeling entries)  
+ -	Automated submission to OpenFold3 for structure prediction
+ -	HA1 domain extraction, optimization by rosetta relaxation protocols for energy minimization (energy optimization enforcement for relaxed structures)
+ -	Comprehensive logging and audit trails, error handling with retry mechanisms
 
 Automated Variant Processing Pipeline: REFSYS ensures that limited laboratory resources (60-100 HI tests and 10-15 HINT tests per week per subtype) are allocated to specimens that will provide the maximum surveillance value.
 The six-tier classification system is particularly elegant - it balances the need for comprehensive coverage with statistical rigor, ensuring that well-characterized variants receive inferred results while directing precious testing resources toward variants that need additional characterization or represent emerging threats.
