@@ -2,7 +2,7 @@
 
 MOD-eling PRO-teins Pipeline
 
-The Mod_Pro pipeline was developed by the CDC's Influenza Division to analyze AlphaFold-predicted structures for antigenic drift of influenza hemagglutinin proteins. Viral strain fitness is predicted in terms of antigenic drift using a fitness landscape model (see repo referenced below) relative to a user-selected vaccine reference. It uses open-source programs along with custom CDC code. With minor tweaking, this program is usable by external partners but can also be run on the CDC cluster. The generated datasets offer insights into the evolutionary fitness of viral strains without the need for in-house sequencing or propagation efforts as long as high-quality sequencing is publicly available. The pipeline simplifies and visualizes complex sequence surveillance data, aiding leadership in making informed decisions regarding public health. It can be used to generate new training datasets and perform _ad hoc_ comparisons of biophysical characteristics between individual isolates or reference strains.
+The MODPRO pipeline was developed by the CDC's Influenza Division to analyze AlphaFold-predicted structures for antigenic drift of influenza hemagglutinin proteins. Viral strain fitness is predicted in terms of antigenic drift using a fitness landscape model (see repo referenced below) relative to a user-selected vaccine reference. It uses open-source programs along with custom CDC code. With minor tweaking, this program is usable by external partners but can also be run on the CDC cluster. The generated datasets offer insights into the evolutionary fitness of viral strains without the need for in-house sequencing or propagation efforts as long as high-quality sequencing is publicly available. The pipeline simplifies and visualizes complex sequence surveillance data, aiding leadership in making informed decisions regarding public health. It can be used to generate new training datasets and perform _ad hoc_ comparisons of biophysical characteristics between individual isolates or reference strains.
 
 Structural bioinformatics pipeline orchestrated by a weekly (Mondays) NiFi cron job that queries ref_sys database top_model_priority table to identify high-priority HA variants not yet predicted by Openfold3 but targeted for experimentation by the laboratory. Pipeline then generates a run manifest after checking HDFS for duplicates and logs metadata before publishing manifest to GWA, triggering Snakemake structural prediction pipeline. The planned update includes database cleanup, automated variant processing, enhanced RBS epitope analysis with sialic acid binding prediction feature, and a strategic shift to HA1-focused relaxation and analytics. 
 
@@ -41,9 +41,9 @@ secondary_structure - Legacy secondary structure annotations
 test - Development/testing artifacts
 
 Update Tables:  
-•	calculated_rbs_epitope_residues - Centralized epitope analysis with geometric calculations. Update table from existing measurements to include a list of the predicted residues based on the criteria explained above. 
-•	pipeline metadata - logging and weekly cron pull of variant runs
-•	Sialic acid binding predictions [off mode until benchmarks passed]
+ - 	calculated_rbs_epitope_residues - Centralized epitope analysis with geometric calculations. Update table from existing measurements to include a list of the predicted residues based on the criteria explained above. 
+ - 	pipeline metadata - logging and weekly cron pull of variant runs
+ - 	Sialic acid binding predictions [off mode until benchmarks passed]
 
 HA1-Specific Modeling: Transitioning from full HA to HA1-focused analysis represents a strategic shift toward more targeted and efficient modeling because of increased functional relevance: HA1 contains the receptor binding domain and primary antigenic sites; better evolutionary focus as most antigenic drift occurs in the HA1 globular head domain. Full PDB will be stored in the database for ad hoc analysis. Critical receptor binding and neutralization sites are HA1-localized and enhanced accuracy better folding predictions for smaller, more stable domains.
 
