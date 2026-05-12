@@ -97,5 +97,5 @@ This repository constitutes a work of the United States Government and is not su
 ## Points of contact
 
 Maintainer Nicole Paterson (CDC) @patersonnicole <qxa4@cdc.gov>
-Developer Nicholas Kovacs (CDC) @kovacsnicholas <pgv8@cdc.gov>
+Developer Nicholas Kovacs (CDC) @nicholasakovacs <nattila.kovacs@gmail.com>
 Developer Brian Mann (CDC) @mannbrian <ytw4@cdc.gov>
