@@ -11,7 +11,6 @@ snakemake \
   --rerun-incomplete \
   --keep-going \
   --latency-wait 60
-
 conda env
 
 ```python
@@ -22,12 +21,10 @@ retries
 ```python
 retries: 3
 ```
-
 gpu usage
 ```bash
 nvidia-smi | tee -a {log}
 ```
-
 run metadata
 ```bash
 date | tee -a {log}
@@ -41,206 +38,290 @@ from pathlib import Path
 
 configfile: "config/config.yaml"
 
-manifest = pd.read_csv(config["manifest"], sep="\t")
-VARIANTS = manifest["variant_hash"].tolist()
+MANIFEST_DIR = "manifests"
 
-FASTA_MAP = {
-    row.variant_hash: row.fasta_path
-    for _, row in manifest.iterrows()
-}
+OPENFOLD3_ROOT = "/scicomp/home-pure/qxa4/openfold3"
+OPENFOLD3_SCRIPTS = f"{OPENFOLD3_ROOT}/openfold-3/scripts"
+OPENFOLD3_MSA_DIR = f"{OPENFOLD3_SCRIPTS}/snakemake_msa"
+OPENFOLD3_MSA_SNAKEFILE = f"{OPENFOLD3_MSA_DIR}/Snakefile"
 
-Path("logs").mkdir(exist_ok=True)
-Path("benchmarks").mkdir(exist_ok=True)
+OPENFOLD_ENV = "/scicomp/groups/OID/NCIRD/ID/VSDB/GAT/shared_conda_envs/of3-aln-env"
+OPENFOLD_DB_PATH = "/scicomp/groups/OID/NCIRD/ID/VSDB/GAT/of3_dbs"
+
+RUNNER_YAML = "config/runner.yaml"
+
+JACKHMMER_THREADS = 16
+HHBLITS_THREADS = 32
+RUNNER_YAML = "config/runner.yaml"
+
+HA_CHAIN_IDS = ["A", "B", "C"]   # trimer
+NA_CHAIN_IDS = ["A", "B", "C", "D"]   # tetramer
+QC_THRESHOLD = 70.0
+
+#one rule to rule them all
 
 rule all:
     input:
-        expand("work/archive/{variant}.tar.gz", variant=VARIANTS)
+        []
 
-rule validate_input:
+
+# manifest to fasta
+rule normalize_manifest_to_fasta:
     input:
-        fasta=lambda wc: FASTA_MAP[wc.variant]
+        manifest = f"{MANIFEST_DIR}/{{manifest}}.csv"
     output:
-        validated="work/validated/{variant}.validated.fasta"
-    log:
-        "logs/validate/{variant}.log"
-    benchmark:
-        "benchmarks/validate/{variant}.txt"
-    threads: 2
+        fasta = "results/{manifest}/seq/seq.fasta",
+        seq_name_json = "results/{manifest}/config/seq_name.json"
+    run:
+        Path(f"results/{wildcards.manifest}/seq").mkdir(parents=True, exist_ok=True)
+        Path(f"results/{wildcards.manifest}/config").mkdir(parents=True, exist_ok=True)
+        lines = [
+            line.strip()
+            for line in open(input.manifest)
+            if line.strip()
+        ]
+        records = []
+        i = 0
+        while i < len(lines):
+            header = lines[i]
+            if header.startswith(">"):
+                name = header[1:].strip()
+            else:
+                name = header.strip()
+            if i + 1 >= len(lines):
+                raise ValueError(
+                    f"Manifest {input.manifest} has hash/header without sequence: {name}"
+                )
+            seq = lines[i + 1].strip()
+            records.append((name, seq))
+            i += 2
+        if not records:
+            raise ValueError(f"No sequence records found in {input.manifest}")
+        with open(output.fasta, "w") as out:
+            for name, seq in records:
+                out.write(f">{name}\n")
+                out.write(f"{seq}\n")
+        with open(output.seq_name_json, "w") as out:
+            json.dump(
+                [
+                    {
+                        "name": name,
+                        "sequence_length": len(seq)
+                    }
+                    for name, seq in records
+                ],
+                out,
+                indent=2
+            )
+ 
+# msa configs
+rule create_openfold3_msa_gen_json:
+    input:
+        fasta = "results/{manifest}/seq/seq.fasta"
+    output:
+        msa_gen_json = f"{OPENFOLD3_MSA_DIR}/{{manifest}}_msa_gen.json"
+    run:
+        Path(OPENFOLD3_MSA_DIR).mkdir(parents=True, exist_ok=True)
+        cfg = {
+            "input_fasta": str(Path(input.fasta).resolve()),
+            "openfold_env": OPENFOLD_ENV,
+            "databases": ["uniref90", "uniprot", "mgnify", "bfd"],
+            "base_database_path": OPENFOLD_DB_PATH,
+            "output_directory": str(Path(f"results/{wildcards.manifest}/msa").resolve()),
+            "jackhmmer_output_format": "sto",
+            "jackhmmer_threads": JACKHMMER_THREADS,
+            "hhblits_threads": HHBLITS_THREADS,
+            "tmpdir": "/tmp",
+            "run_template_search": False
+        }
+        with open(output.msa_gen_json, "w") as out:
+            json.dump(cfg, out, indent=4)
+
+rule create_openfold3_prediction_config:
+    input:
+        fasta = "results/{manifest}/seq/seq.fasta"
+    output:
+        config_json = "results/{manifest}/config/openfold3_input.json"
+    run:
+        Path(f"results/{wildcards.manifest}/config").mkdir(parents=True, exist_ok=True)
+        records = []
+        name = None
+        seq_parts = []
+        for line in open(input.fasta):
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if name is not None:
+                    records.append((name, "".join(seq_parts)))
+                name = line[1:].strip()
+                seq_parts = []
+            else:
+                seq_parts.append(line)
+        if name is not None:
+            records.append((name, "".join(seq_parts)))
+        if not records:
+            raise ValueError(f"No FASTA records found in {input.fasta}")
+        of3_records = []
+        for name, seq in records:
+            msa_dir = str(Path(f"results/{wildcards.manifest}/msa").resolve())
+            of3_records.append({
+                "molecule_type": "protein",
+                "chain_ids": "A",
+                "sequence": seq,
+                "use_msas": True,
+                "use_main_msas": True,
+                "use_paired_msas": False,
+                "main_msa_file_paths": msa_dir,
+                "paired_msa_file_paths": msa_dir,
+                "template_alignment_file_path": msa_dir
+            })
+        with open(output.config_json, "w") as out:
+            if len(of3_records) == 1:
+                json.dump(of3_records[0], out, indent=2)
+            else:
+                json.dump(of3_records, out, indent=2)
+
+# run msa
+
+rule run_openfold3_msas:
+    input:
+        msa_gen_json = f"{OPENFOLD3_MSA_DIR}/{{manifest}}_msa_gen.json"
+    output:
+        done = "results/{manifest}/msa/msa.done"
     shell:
-        r"""
-        set -euo pipefail
+        """
+        mkdir -p results/{wildcards.manifest}/msa
 
-        mkdir -p work/validated logs/validate benchmarks/validate
+        cd {OPENFOLD3_MSA_DIR}
 
-        echo "[VALIDATE] Starting validation for {wildcards.variant}" | tee {log}
+        snakemake \
+          --configfile {input.msa_gen_json} \
+          --cores {HHBLITS_THREADS} \
+          --rerun-incomplete
 
-        python scripts/validate_input.py \
-            --input {input.fasta} \
-            --output {output.validated} \
-            2>&1 | tee -a {log}
-
-        echo "[VALIDATE] Finished validation" | tee -a {log}
+        touch {output.done}
         """
 
-# MSA generation
-
-rule generate_msa:
+# inference
+rule run_openfold3_prediction:
     input:
-        fasta="work/validated/{variant}.validated.fasta"
+        query_json = "results/{manifest}/openfold3/query.json"
     output:
-        msa="work/msa/{variant}.a3m"
-    log:
-        "logs/msa/{variant}.log"
-    benchmark:
-        "benchmarks/msa/{variant}.txt"
-    threads:
-        config["msa"]["threads"]
-    resources:
-        mem_mb=config["resources"]["msa_mem_mb"]
+        done = "results/{manifest}/openfold3/openfold_output/prediction.done"
+    params:
+        output_dir = "results/{manifest}/openfold3/openfold_output",
+        runner_yaml = RUNNER_YAML
     shell:
-        r"""
-        set -euo pipefail
+        """
+        mkdir -p {params.output_dir}
 
-        mkdir -p work/msa logs/msa benchmarks/msa
+        run_openfold predict \
+          --query_json {input.query_json} \
+          --use_msa_server=False \
+          --output_dir {params.output_dir} \
+          --runner_yaml {params.runner_yaml}
 
-        echo "[MSA] Starting MSA generation for {wildcards.variant}" | tee {log}
+        touch {output.done}
+        """
+# qc
 
-        python scripts/generate_msa.py \
-            --input {input.fasta} \
-            --db {config[msa][db]} \
-            --threads {threads} \
-            --output {output.msa} \
-            2>&1 | tee -a {log}
+rule check_qc:
+    input:
+        plddt = "results/{manifest}/reports/plddt.txt"
+    output:
+        flag = "results/{manifest}/qc/passed.flag"
+    params:
+        threshold = 70.0
+    run:
+        Path(f"results/{wildcards.manifest}/qc").mkdir(parents=True, exist_ok=True)
 
-        echo "[MSA] Completed MSA generation" | tee -a {log}
+        score = float(open(input.plddt).read().strip())
+
+        if score < params.threshold:
+            raise ValueError(
+                f"QC threshold not met for {wildcards.manifest}: {score}"
+            )
+        shell("touch {output.flag}")
+
+# ha1 extraction
+
+rule extract_ha1:
+    input:
+        pdb = "results/{manifest}/prediction/model.pdb",
+        qc = "results/{manifest}/qc/passed.flag"
+    output:
+        ha1 = "results/{manifest}/ha1/ha1_only.pdb"
+    shell:
+        """
+        mkdir -p results/{wildcards.manifest}/ha1
+        python scripts/extract_ha1.py {input.pdb} > {output.ha1}
         """
 
-# Extract metadata
-
-rule extract_hash_chain:
+rule archive_full_pdb:
     input:
-        msa="work/msa/{variant}.a3m"
+        pdb = "results/{manifest}/prediction/model.pdb"
     output:
-        metadata="work/hash_chain/{variant}.json"
-    log:
-        "logs/hash_chain/{variant}.log"
-    benchmark:
-        "benchmarks/hash_chain/{variant}.txt"
+        archived = "results/{manifest}/archive/full_length.pdb"
     shell:
-        r"""
-        set -euo pipefail
-
-        mkdir -p work/hash_chain logs/hash_chain benchmarks/hash_chain
-
-        echo "[HASH_CHAIN] Extracting metadata for {wildcards.variant}" | tee {log}
-
-        python scripts/extract_hash_chain.py \
-            --msa {input.msa} \
-            --output {output.metadata} \
-            2>&1 | tee -a {log}
-
-        echo "[HASH_CHAIN] Extraction complete" | tee -a {log}
+        """
+        mkdir -p results/{wildcards.manifest}/archive
+        cp {input.pdb} {output.archived}
         """
 
-# run openfold3 inference
-
-rule infer_structure:
+rule rosetta_score_ha1:
     input:
-        msa="work/msa/{variant}.a3m",
-        metadata="work/hash_chain/{variant}.json"
-
+        ha1 = "results/{manifest}/ha1/ha1_only.pdb"
     output:
-        pdb="work/predicted/{variant}.pdb"
-
-    log:
-        "logs/infer/{variant}.log"
-
-    benchmark:
-        "benchmarks/infer/{variant}.txt"
-
-    threads: 16
-
-    resources:
-        gpu=config["openfold"]["gpu"],
-        mem_mb=config["resources"]["infer_mem_mb"]
-
+        score = "results/{manifest}/ha1/score.sc"
     shell:
-        r"""
-        set -euo pipefail
-
-        mkdir -p work/predicted logs/infer benchmarks/infer
-
-        echo "[INFER] Starting structure prediction for {wildcards.variant}" | tee {log}
-
-        python scripts/infer_structure.py \
-            --msa {input.msa} \
-            --metadata {input.metadata} \
-            --checkpoint {config[openfold][checkpoint]} \
-            --output {output.pdb} \
-            2>&1 | tee -a {log}
-
-        echo "[INFER] Structure inference complete" | tee -a {log}
+        """
+        rosetta_score.linuxgccrelease \
+          -s {input.ha1} \
+          -out:file:scorefile {output.score}
         """
 
-# QC reports
-
-rule generate_report:
+rule rmsd_maxsub_ha1:
     input:
-        pdb="work/predicted/{variant}.pdb"
-
+        ha1 = "results/{manifest}/ha1/ha1_only.pdb"
     output:
-        report="work/reports/{variant}.qc.json"
-
-    log:
-        "logs/report/{variant}.log"
-
-    benchmark:
-        "benchmarks/report/{variant}.txt"
-
+        metrics = "results/{manifest}/ha1/rmsd_maxsub.txt"
     shell:
-        r"""
-        set -euo pipefail
-
-        mkdir -p work/reports logs/report benchmarks/report
-
-        echo "[REPORT] Generating QC report for {wildcards.variant}" | tee {log}
-
-        python scripts/generate_report.py \
-            --pdb {input.pdb} \
-            --output {output.report} \
-            2>&1 | tee -a {log}
-
-        echo "[REPORT] QC generation complete" | tee -a {log}
+        """
+        python scripts/calc_rmsd_maxsub.py {input.ha1} > {output.metrics}
         """
 
-# archive and upload hdfs
-
-rule archive_results:
+rule rosetta_relax:
     input:
-        pdb="work/predicted/{variant}.pdb",
-        report="work/reports/{variant}.qc.json"
-
+        ha1 = "results/{manifest}/ha1/ha1_only.pdb"
     output:
-        archive="work/archive/{variant}.tar.gz"
-
-    log:
-        "logs/archive/{variant}.log"
-
-    benchmark:
-        "benchmarks/archive/{variant}.txt"
-
+        relaxed = "results/{manifest}/ha1/relaxed.pdb"
     shell:
-        r"""
-        set -euo pipefail
+        """
+        rosetta_relax.linuxgccrelease \
+          -s {input.ha1} \
+          -out:path:pdb results/{wildcards.manifest}/ha1
 
-        mkdir -p work/archive logs/archive benchmarks/archive
+        mv results/{wildcards.manifest}/ha1/*relaxed*.pdb {output.relaxed}
+        """
 
-        echo "[ARCHIVE] Archiving outputs for {wildcards.variant}" | tee {log}
+rule select_best_ha1:
+    input:
+        original = "results/{manifest}/ha1/ha1_only.pdb",
+        relaxed = "results/{manifest}/ha1/relaxed.pdb",
+        score = "results/{manifest}/ha1/score.sc",
+        metrics = "results/{manifest}/ha1/rmsd_maxsub.txt",
+        archived = "results/{manifest}/archive/full_length.pdb"
+    output:
+        selected = "results/{manifest}/final/ha1_selected.pdb"
+    shell:
+        """
+        mkdir -p results/{wildcards.manifest}/final
 
-        tar -czf {output.archive} \
-            {input.pdb} \
-            {input.report} \
-            2>&1 | tee -a {log}
-
-        echo "[ARCHIVE] Archive complete" | tee -a {log}
-
+        python scripts/select_best.py \
+          --original {input.original} \
+          --relaxed {input.relaxed} \
+          --score {input.score} \
+          --metrics {input.metrics} \
+          --out {output.selected}
+        """
