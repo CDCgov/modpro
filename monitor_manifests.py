@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 
+"""
+monitors manifests dir for new files dropped into manifests folder by nifi on cron
+
+usage notes:
+tmux new -s manifest-monitor
+python monitor_manifests.py | tee monitor.log
+tmux kill-session -t manifest-monitor
+"""
+
 from pathlib import Path
 import subprocess
 import time
