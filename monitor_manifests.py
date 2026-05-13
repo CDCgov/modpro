@@ -17,6 +17,7 @@ import hashlib
 MANIFEST_DIR = Path("./manifests")
 DONE_DIR = MANIFEST_DIR / ".processed"
 DONE_DIR.mkdir(exist_ok=True)
+WORKFLOW_DIR = Path("/scicomp/groups/modpro").resolve()
 
 POLL_SECONDS = 10
 
