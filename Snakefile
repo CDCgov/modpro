@@ -212,7 +212,7 @@ rule run_openfold3_msa:
     shell:
         """
         mkdir -p results/{wildcards.manifest}/logs
-        {
+        {{
           echo "msa generation starting"
           date
           hostname
@@ -222,7 +222,7 @@ rule run_openfold3_msa:
           echo "msa_snakefile={params.msa_snakefile}"
           echo "threads={threads}"
           echo "pwd=$(pwd)"
-        } >> {log} 2>&1
+        }} >> {log} 2>&1
         snakemake \
           -s {params.msa_snakefile} \
           --configfile {input.msa_config} \
@@ -233,10 +233,10 @@ rule run_openfold3_msa:
           --rerun-incomplete \
           --printshellcmds \
           >> {log} 2>&1
-        {
+        {{
           echo "msa generation complete"
           date
-        } >> {log} 2>&1
+        }} >> {log} 2>&1
         touch {output.done}
         """
 # create json configs
@@ -292,7 +292,7 @@ rule run_openfold3_prediction:
         """
         mkdir -p {params.output_dir}
         mkdir -p results/{wildcards.manifest}/logs
-        {
+        {{
           echo "starting inference"
           date
           hostname
@@ -305,7 +305,7 @@ rule run_openfold3_prediction:
           echo "GPU?"
           nvidia-smi || true
           env | sort
-        } >> {log} 2>&1
+        }} >> {log} 2>&1
 
         run_openfold predict \
           --query_json {input.query_json} \
@@ -313,10 +313,10 @@ rule run_openfold3_prediction:
           --output_dir {params.output_dir} \
           --runner_yaml {params.runner_yaml} \
           >> {log} 2>&1
-        {
+        {{
           echo "inference complete"
           date
-        } >> {log} 2>&1
+        }} >> {log} 2>&1
         touch {output.done}
         """
 # check for completion - msa
