@@ -1,0 +1,20 @@
+# STOCKHOLM 1.0
+
+#=GS MGYP000568314627/7-40    DE [subseq from] FL=0
+#=GS MGYP000568314627/46-79   DE [subseq from] FL=0
+#=GS MGYP000568314627/73-113  DE [subseq from] FL=0
+#=GS MGYP000568314627/118-162 DE [subseq from] FL=0
+#=GS MGYP001063023503/69-112  DE [subseq from] FL=1
+#=GS MGYP001063023503/130-170 DE [subseq from] FL=1
+#=GS MGYP001063023503/171-211 DE [subseq from] FL=1
+
+H5N1_monomer_HA                  GLFGAIAGFIEGGWQGMVDGWYGYHHSNEQGSGYAADKESTQKAIDGVTNKVNSIIDKMNTQFEAVGREFNNLER----RIENLNKKMEDGFLDVWTYNAELLVLMENERTLDFHDSNVKNLYDKVRLQLRDNAKELGNGCFEFYHKCDNECMESVRNGTYDYPQYSEEARLKREEISSGRLVPR
+MGYP000568314627/7-40            ---------------------------------------------KGQKEIITSLLREMNTRFEAVDKHFETLQK----QIDS------------------------------------------------------------------------------------------------------
+MGYP000568314627/46-79           --------------------------------------------LKGQKETIASLLREMNTRFEAADKRFEALQE----ELK-------------------------------------------------------------------------------------------------------
+MGYP000568314627/73-113          ---------------------------------------ALQEELKGQKEIIASLLREMNTRFEAADKRFEAFQK----QIDSR-----------------------------------------------------------------------------------------------------
+MGYP000568314627/118-162         --------------------------------------------LEGQKEIIASLLREMNIRFEAINKRFEALERENQARFEAINKRFE------------------------------------------------------------------------------------------------
+MGYP001063023503/69-112          -----------------------------------------------ADKRFESLITEMNARFEQVDKRFEQVDK----RFESLIAEMNARFEQV------------------------------------------------------------------------------------------
+MGYP001063023503/130-170         -----------------------------------------------VDRRFGSLIAEMNARFEQIDKRFEQVDK----RFESLIAEMNARF---------------------------------------------------------------------------------------------
+MGYP001063023503/171-211         ---------------------------------------------EQVDKRFESLITEMNARFEQVDRRFEQVDK----RFEQMDKRFEQ-----------------------------------------------------------------------------------------------
+#=GC RF                          xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx....xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+//

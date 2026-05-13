@@ -1,0 +1,13 @@
+{
+  "molecule_type": "protein",
+  "chain_ids": "A",
+  "sequence": "GLFGAIAGFIEGGWQGMVDGWYGYHHSNEQGSGYAADKESTQKAIDGVTNKVNSIIDKMNTQFEAVGREFNNLERRIENLNKKMEDGFLDVWTYNAELLVLMENERTLDFHDSNVKNLYDKVRLQLRDNAKELGNGCFEFYHKCDNECMESVRNGTYDYPQYSEEARLKREEISSGRLVPR",
+  "use_msas": true,
+  "use_main_msas": true,
+  "use_paired_msas": false,
+  "main_msa_file_paths": "~/openfold3/H5N1_monomer_HA",
+  "paired_msa_file_paths": "~/openfold3/H5N1_monomer_HA",
+  "template_alignment_file_path": "~/openfold3/H5N1_monomer_HA"
+}
+
+

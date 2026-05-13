@@ -1,0 +1,108 @@
+Loading openfold3 environment
+Loading CUDA module...
+Checking NVIDIA GPU status...
+Tue Nov 18 17:41:49 2025       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.95.05              Driver Version: 580.95.05      CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  Tesla V100-PCIE-16GB           Off |   00000000:83:00.0 Off |                    0 |
+| N/A   29C    P0             24W /  250W |       0MiB /  16384MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+Usage: run_openfold predict [OPTIONS]
+Try 'run_openfold predict --help' for help.
+
+Error: Invalid value for '--query_json': File 'HA_test.json' does not exist.
+Script completed.
+Loading openfold3 environment
+Loading CUDA module...
+Checking NVIDIA GPU status...
+Tue Nov 18 17:44:09 2025       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.95.05              Driver Version: 580.95.05      CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  Tesla V100-PCIE-16GB           Off |   00000000:83:00.0 Off |                    0 |
+| N/A   30C    P0             26W /  250W |       0MiB /  16384MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+Traceback (most recent call last):
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/bin/run_openfold", line 7, in <module>
+    sys.exit(cli())
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/click/core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/click/core.py", line 1406, in main
+    rv = self.invoke(ctx)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/click/core.py", line 1873, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/click/core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/click/core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/openfold3/run_openfold.py", line 159, in predict
+    expt_config = InferenceExperimentConfig(
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/pydantic/main.py", line 250, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/openfold3/entry_points/validator.py", line 398, in _try_default_ckpt_path
+    _maybe_download_parameters(self.inference_ckpt_path)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/openfold3/entry_points/validator.py", line 56, in _maybe_download_parameters
+    s3 = boto3.client("s3", config=botocoreConfig(signature_version=botocore.UNSIGNED))
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/boto3/__init__.py", line 93, in client
+    return _get_default_session().client(*args, **kwargs)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/boto3/__init__.py", line 81, in _get_default_session
+    setup_default_session()
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/boto3/__init__.py", line 35, in setup_default_session
+    DEFAULT_SESSION = Session(**kwargs)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/boto3/session.py", line 106, in __init__
+    self._setup_loader()
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/boto3/session.py", line 147, in _setup_loader
+    self._loader = self._session.get_component('data_loader')
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/session.py", line 816, in get_component
+    return self._components.get_component(name)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/session.py", line 1201, in get_component
+    self._components[name] = factory()
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/session.py", line 201, in <lambda>
+    lambda: create_loader(self.get_config_variable('data_path')),
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/session.py", line 325, in get_config_variable
+    return self.get_component('config_store').get_config_variable(
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/configprovider.py", line 502, in get_config_variable
+    return provider.provide()
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/configprovider.py", line 708, in provide
+    value = provider.provide()
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/configprovider.py", line 795, in provide
+    scoped_config = self._session.get_scoped_config()
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/session.py", line 414, in get_scoped_config
+    profile_map = self._build_profile_map()
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/session.py", line 310, in _build_profile_map
+    self._profile_map = self.full_config['profiles']
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/session.py", line 441, in full_config
+    self._config = botocore.configloader.load_config(config_file)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/configloader.py", line 105, in load_config
+    parsed = raw_config_parse(config_filename)
+  File "/scicomp/home-pure/qxa4/miniconda3/envs/openfold3/lib/python3.10/site-packages/botocore/configloader.py", line 150, in raw_config_parse
+    raise botocore.exceptions.ConfigParseError(
+botocore.exceptions.ConfigParseError: Unable to parse config file: /scicomp/home-pure/qxa4/.aws/config
+Script completed.
