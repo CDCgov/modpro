@@ -40,13 +40,13 @@ configfile: "config/config.yaml"
 
 MANIFEST_DIR = "manifests"
 
-OPENFOLD3_ROOT = "/scicomp/home-pure/qxa4/openfold3"
+OPENFOLD3_ROOT = "/scicomp/groups/modpro/openfold3"
 OPENFOLD3_SCRIPTS = f"{OPENFOLD3_ROOT}/openfold-3/scripts"
 OPENFOLD3_MSA_DIR = f"{OPENFOLD3_SCRIPTS}/snakemake_msa"
 OPENFOLD3_MSA_SNAKEFILE = f"{OPENFOLD3_MSA_DIR}/Snakefile"
 
-OPENFOLD_ENV = "/scicomp/groups/OID/NCIRD/ID/VSDB/GAT/shared_conda_envs/of3-aln-env"
-OPENFOLD_DB_PATH = "/scicomp/groups/OID/NCIRD/ID/VSDB/GAT/of3_dbs"
+OPENFOLD_ENV = "/scicomp/groups/ID-VSDB/GAT/shared_conda_envs/of3-aln-env"
+OPENFOLD_DB_PATH = "/scicomp/groups/ID-VSDB/GAT/of3_dbs"
 
 RUNNER_YAML = "config/runner.yaml"
 
@@ -56,14 +56,12 @@ RUNNER_YAML = "config/runner.yaml"
 
 HA_CHAIN_IDS = ["A", "B", "C"]   # trimer
 NA_CHAIN_IDS = ["A", "B", "C", "D"]   # tetramer
-QC_THRESHOLD = 70.0
+QC_THRESHOLD = 75.0
 
 #one rule to rule them all
-
 rule all:
     input:
         []
-
 
 # manifest to fasta
 rule normalize_manifest_to_fasta:
