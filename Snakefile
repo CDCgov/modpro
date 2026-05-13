@@ -11,8 +11,8 @@ snakemake \
   --rerun-incomplete \
   --keep-going \
   --latency-wait 60
-conda env
 
+conda env
 ```python
 conda:
     "envs/openfold.yaml"
@@ -63,16 +63,15 @@ rule all:
     input:
         []
 
-# manifest to fasta
-rule normalize_manifest_to_fasta:
+# break up manifest to single aa seq per fasta 
+checkpoint split_manifest:
     input:
         manifest = f"{MANIFEST_DIR}/{{manifest}}.csv"
     output:
-        fasta = "results/{manifest}/seq/seq.fasta",
-        seq_name_json = "results/{manifest}/config/seq_name.json"
+        outdir = directory("results/{manifest}/variants")
     run:
-        Path(f"results/{wildcards.manifest}/seq").mkdir(parents=True, exist_ok=True)
-        Path(f"results/{wildcards.manifest}/config").mkdir(parents=True, exist_ok=True)
+        outdir = Path(output.outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
         lines = [
             line.strip()
             for line in open(input.manifest)
@@ -81,36 +80,38 @@ rule normalize_manifest_to_fasta:
         records = []
         i = 0
         while i < len(lines):
-            header = lines[i]
-            if header.startswith(">"):
-                name = header[1:].strip()
-            else:
-                name = header.strip()
+            variant_hash = lines[i].lstrip(">").strip()
             if i + 1 >= len(lines):
                 raise ValueError(
-                    f"Manifest {input.manifest} has hash/header without sequence: {name}"
+                    f"Manifest {input.manifest} variant hash has no sequence: {variant_hash}"
                 )
-            seq = lines[i + 1].strip()
-            records.append((name, seq))
+            sequence = lines[i + 1].strip().upper()
+            if not variant_hash:
+                raise ValueError(f"Empty variant hash found in {input.manifest}")
+            if not sequence:
+                raise ValueError(f"Empty sequence found for {variant_hash}")
+            records.append((variant_hash, sequence))
             i += 2
         if not records:
             raise ValueError(f"No sequence records found in {input.manifest}")
-        with open(output.fasta, "w") as out:
-            for name, seq in records:
-                out.write(f">{name}\n")
-                out.write(f"{seq}\n")
-        with open(output.seq_name_json, "w") as out:
-            json.dump(
-                [
-                    {
-                        "name": name,
-                        "sequence_length": len(seq)
-                    }
-                    for name, seq in records
-                ],
-                out,
-                indent=2
-            )
+        seen = set()
+        manifest_records = []
+        for variant_hash, sequence in records:
+            if variant_hash in seen:
+                continue
+            seen.add(variant_hash)
+            fasta_path = outdir / f"{variant_hash}.fasta"
+            with open(fasta_path, "w") as out:
+                out.write(f">{variant_hash}\n")
+                out.write(f"{sequence}\n")
+            manifest_records.append({
+                "variant_hash": variant_hash,
+                "fasta": str(fasta_path),
+                "sequence_length": len(sequence)
+            })
+
+        with open(outdir / "variants.json", "w") as out:
+            json.dump(manifest_records, out, indent=2)
  
 # msa configs
 rule create_openfold3_msa_gen_json:
@@ -197,7 +198,6 @@ rule run_openfold3_msas:
           --configfile {input.msa_gen_json} \
           --cores {HHBLITS_THREADS} \
           --rerun-incomplete
-
         touch {output.done}
         """
 
