@@ -32,24 +32,27 @@ hostname | tee -a {log}
 env | sort | tee -a {log}
 ```
 """
-
 import pandas as pd
 from pathlib import Path
+import json
+import socket
+import smtplib
+from email.message import EmailMessage
 
-configfile: "config/config.yaml"
+EMAIL_TO = "qxa4@cdc.gov"
+EMAIL_FROM = "qxa4@cdc.gov"
 
 MANIFEST_DIR = "manifests"
 
 OPENFOLD3_ROOT = "/scicomp/groups/modpro/openfold3"
 OPENFOLD3_SCRIPTS = f"{OPENFOLD3_ROOT}/openfold-3/scripts"
 OPENFOLD3_MSA_DIR = f"{OPENFOLD3_SCRIPTS}/snakemake_msa"
-OPENFOLD3_MSA_SNAKEFILE = f"{OPENFOLD3_MSA_DIR}/Snakefile"
+OPENFOLD3_MSA_SNAKEFILE = f"{OPENFOLD3_MSA_DIR}/MSA_Snakefile"
 
 OPENFOLD_ENV = "/scicomp/groups/ID-VSDB/GAT/shared_conda_envs/of3-aln-env"
 OPENFOLD_DB_PATH = "/scicomp/groups/ID-VSDB/GAT/of3_dbs"
 
-RUNNER_YAML = "config/runner.yaml"
-
+MSA_CORES = 32
 JACKHMMER_THREADS = 16
 HHBLITS_THREADS = 32
 RUNNER_YAML = "config/runner.yaml"
@@ -57,6 +60,36 @@ RUNNER_YAML = "config/runner.yaml"
 HA_CHAIN_IDS = ["A", "B", "C"]   # trimer
 NA_CHAIN_IDS = ["A", "B", "C", "D"]   # tetramer
 QC_THRESHOLD = 75.0
+EMAIL_TO = "qxa4@cdc.gov"
+EMAIL_FROM = "qxa4@cdc.gov"
+
+def send_failure_email(subject, body):
+    msg = EmailMessage()
+    msg["To"] = EMAIL_TO
+    msg["From"] = EMAIL_FROM
+    msg["Subject"] = subject
+    msg.set_content(body)
+    with smtplib.SMTP("localhost") as smtp:
+        smtp.send_message(msg)
+onerror:
+    subject = "[modpro] Snakemake OpenFold3 pipeline failed"
+    body = f"""
+Snakemake pipeline failed.
+Host:
+{socket.gethostname()}
+Snakefile:
+{workflow.snakefile}
+Working directory:
+{Path.cwd()}
+Error:
+{error}
+Centralized logs:
+results/<manifest>/logs/
+"""
+    try:
+        send_failure_email(subject, body)
+    except Exception as e:
+        print(f"Failed to send failure email: {e}")
 
 #one rule to rule them all
 rule all:
@@ -109,7 +142,6 @@ checkpoint split_manifest:
                 "fasta": str(fasta_path),
                 "sequence_length": len(sequence)
             })
-
         with open(outdir / "variants.json", "w") as out:
             json.dump(manifest_records, out, indent=2)
 
@@ -140,7 +172,7 @@ def all_prediction_done(wildcards):
     )
  
 # msa configs
-te_msa_config:
+rule create_msa_config:
     input:
         fasta = "results/{manifest}/variants/{variant}.fasta"
     output:
@@ -148,7 +180,6 @@ te_msa_config:
     run:
         outdir = Path(f"results/{wildcards.manifest}/openfold3/{wildcards.variant}/msa")
         outdir.mkdir(parents=True, exist_ok=True)
-
         cfg = {
             "input_fasta": str(Path(input.fasta).resolve()),
             "openfold_env": OPENFOLD_ENV,
@@ -161,9 +192,7 @@ te_msa_config:
             "tmpdir": "/tmp",
             "run_template_search": False
         }
-
         Path(output.msa_config).parent.mkdir(parents=True, exist_ok=True)
-
         with open(output.msa_config, "w") as out:
             json.dump(cfg, out, indent=2)
 
@@ -176,28 +205,41 @@ rule run_openfold3_msa:
         MSA_CORES
     resources:
         msa_slots = 1
+    params:
+        msa_snakefile = OPENFOLD3_MSA_SNAKEFILE
     log:
-        "results/{manifest}/openfold3/{variant}/logs/msa.log"
+        "results/{manifest}/logs/{variant}.msa.log"
     shell:
         """
-        mkdir -p results/{wildcards.manifest}/openfold3/{wildcards.variant}/logs
-
-        date | tee -a {log}
-        hostname | tee -a {log}
-
+        mkdir -p results/{wildcards.manifest}/logs
+        {
+          echo "msa generation starting"
+          date
+          hostname
+          echo "manifest={wildcards.manifest}"
+          echo "variant={wildcards.variant}"
+          echo "msa_config={input.msa_config}"
+          echo "msa_snakefile={params.msa_snakefile}"
+          echo "threads={threads}"
+          echo "pwd=$(pwd)"
+        } >> {log} 2>&1
         snakemake \
-          -s {OF3_MSA_SNAKEFILE} \
+          -s {params.msa_snakefile} \
           --configfile {input.msa_config} \
           --cores {threads} \
           --nolock \
           --keep-going \
           --latency-wait 120 \
           --rerun-incomplete \
+          --printshellcmds \
           >> {log} 2>&1
-
+        {
+          echo "msa generation complete"
+          date
+        } >> {log} 2>&1
         touch {output.done}
         """
-
+# create json configs
 rule create_query_json:
     input:
         fasta = "results/{manifest}/variants/{variant}.fasta",
@@ -206,17 +248,13 @@ rule create_query_json:
         query_json = "results/{manifest}/openfold3/{variant}/query.json"
     run:
         lines = [line.strip() for line in open(input.fasta) if line.strip()]
-
         if len(lines) < 2:
             raise ValueError(f"Invalid FASTA: {input.fasta}")
-
         name = lines[0].replace(">", "")
         sequence = "".join(lines[1:])
-
         msa_path = str(
             Path(f"results/{wildcards.manifest}/openfold3/{wildcards.variant}/msa/{name}").resolve()
         )
-
         query = {
             "queries": {
                 f"{name}_HA_trimer": {
@@ -234,12 +272,10 @@ rule create_query_json:
                 }
             }
         }
-
         Path(output.query_json).parent.mkdir(parents=True, exist_ok=True)
-
         with open(output.query_json, "w") as out:
             json.dump(query, out, indent=2)
-
+# run of3 inference
 rule run_openfold3_prediction:
     input:
         query_json = "results/{manifest}/openfold3/{variant}/query.json"
@@ -251,24 +287,39 @@ rule run_openfold3_prediction:
     resources:
         inference_slots = 1
     log:
-        "results/{manifest}/openfold3/{variant}/logs/prediction.log"
+        "results/{manifest}/logs/{variant}.prediction.log"
     shell:
         """
         mkdir -p {params.output_dir}
-        mkdir -p results/{wildcards.manifest}/openfold3/{wildcards.variant}/logs
-        date | tee -a {log}
-        hostname | tee -a {log}
-        nvidia-smi | tee -a {log}
+        mkdir -p results/{wildcards.manifest}/logs
+        {
+          echo "starting inference"
+          date
+          hostname
+          echo "manifest={wildcards.manifest}"
+          echo "variant={wildcards.variant}"
+          echo "query_json={input.query_json}"
+          echo "output_dir={params.output_dir}"
+          echo "runner_yaml={params.runner_yaml}"
+          echo "pwd=$(pwd)"
+          echo "GPU?"
+          nvidia-smi || true
+          env | sort
+        } >> {log} 2>&1
+
         run_openfold predict \
           --query_json {input.query_json} \
           --use_msa_server=False \
           --output_dir {params.output_dir} \
           --runner_yaml {params.runner_yaml} \
           >> {log} 2>&1
-
+        {
+          echo "inference complete"
+          date
+        } >> {log} 2>&1
         touch {output.done}
         """
-
+# check for completion - msa
 rule manifest_msa_complete:
     input:
         all_msa_done
@@ -276,8 +327,7 @@ rule manifest_msa_complete:
         done = "results/{manifest}/openfold3/msa.done"
     shell:
         "touch {output.done}"
-
-
+#check for completion - inference
 rule manifest_prediction_complete:
     input:
         all_prediction_done
