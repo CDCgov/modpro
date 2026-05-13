@@ -112,214 +112,176 @@ checkpoint split_manifest:
 
         with open(outdir / "variants.json", "w") as out:
             json.dump(manifest_records, out, indent=2)
+
+# get variant hashes
+def get_variants(wildcards):
+    ckpt = checkpoints.split_manifest.get(manifest=wildcards.manifest)
+    variants_json = Path(ckpt.output.outdir) / "variants.json"
+    with open(variants_json) as handle:
+        records = json.load(handle)
+    return [r["variant_hash"] for r in records]
+
+# define variant hash task list - msa
+def all_msa_done(wildcards):
+    variants = get_variants(wildcards)
+    return expand(
+        "results/{manifest}/openfold3/{variant}/msa/msa.done",
+        manifest=wildcards.manifest,
+        variant=variants
+    )
+
+# define variant hash task list - inference
+def all_prediction_done(wildcards):
+    variants = get_variants(wildcards)
+    return expand(
+        "results/{manifest}/openfold3/{variant}/prediction/prediction.done",
+        manifest=wildcards.manifest,
+        variant=variants
+    )
  
 # msa configs
-rule create_openfold3_msa_gen_json:
+te_msa_config:
     input:
-        fasta = "results/{manifest}/seq/seq.fasta"
+        fasta = "results/{manifest}/variants/{variant}.fasta"
     output:
-        msa_gen_json = f"{OPENFOLD3_MSA_DIR}/{{manifest}}_msa_gen.json"
+        msa_config = "results/{manifest}/openfold3/{variant}/msa_config.json"
     run:
-        Path(OPENFOLD3_MSA_DIR).mkdir(parents=True, exist_ok=True)
+        outdir = Path(f"results/{wildcards.manifest}/openfold3/{wildcards.variant}/msa")
+        outdir.mkdir(parents=True, exist_ok=True)
+
         cfg = {
             "input_fasta": str(Path(input.fasta).resolve()),
             "openfold_env": OPENFOLD_ENV,
             "databases": ["uniref90", "uniprot", "mgnify", "bfd"],
             "base_database_path": OPENFOLD_DB_PATH,
-            "output_directory": str(Path(f"results/{wildcards.manifest}/msa").resolve()),
+            "output_directory": str(outdir.resolve()),
             "jackhmmer_output_format": "sto",
             "jackhmmer_threads": JACKHMMER_THREADS,
             "hhblits_threads": HHBLITS_THREADS,
             "tmpdir": "/tmp",
             "run_template_search": False
         }
-        with open(output.msa_gen_json, "w") as out:
-            json.dump(cfg, out, indent=4)
 
-rule create_openfold3_prediction_config:
+        Path(output.msa_config).parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output.msa_config, "w") as out:
+            json.dump(cfg, out, indent=2)
+
+rule run_openfold3_msa:
     input:
-        fasta = "results/{manifest}/seq/seq.fasta"
+        msa_config = "results/{manifest}/openfold3/{variant}/msa_config.json"
     output:
-        config_json = "results/{manifest}/config/openfold3_input.json"
-    run:
-        Path(f"results/{wildcards.manifest}/config").mkdir(parents=True, exist_ok=True)
-        records = []
-        name = None
-        seq_parts = []
-        for line in open(input.fasta):
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith(">"):
-                if name is not None:
-                    records.append((name, "".join(seq_parts)))
-                name = line[1:].strip()
-                seq_parts = []
-            else:
-                seq_parts.append(line)
-        if name is not None:
-            records.append((name, "".join(seq_parts)))
-        if not records:
-            raise ValueError(f"No FASTA records found in {input.fasta}")
-        of3_records = []
-        for name, seq in records:
-            msa_dir = str(Path(f"results/{wildcards.manifest}/msa").resolve())
-            of3_records.append({
-                "molecule_type": "protein",
-                "chain_ids": "A",
-                "sequence": seq,
-                "use_msas": True,
-                "use_main_msas": True,
-                "use_paired_msas": False,
-                "main_msa_file_paths": msa_dir,
-                "paired_msa_file_paths": msa_dir,
-                "template_alignment_file_path": msa_dir
-            })
-        with open(output.config_json, "w") as out:
-            if len(of3_records) == 1:
-                json.dump(of3_records[0], out, indent=2)
-            else:
-                json.dump(of3_records, out, indent=2)
-
-# run msa
-
-rule run_openfold3_msas:
-    input:
-        msa_gen_json = f"{OPENFOLD3_MSA_DIR}/{{manifest}}_msa_gen.json"
-    output:
-        done = "results/{manifest}/msa/msa.done"
+        done = "results/{manifest}/openfold3/{variant}/msa/msa.done"
+    threads:
+        MSA_CORES
+    resources:
+        msa_slots = 1
+    log:
+        "results/{manifest}/openfold3/{variant}/logs/msa.log"
     shell:
         """
-        mkdir -p results/{wildcards.manifest}/msa
+        mkdir -p results/{wildcards.manifest}/openfold3/{wildcards.variant}/logs
 
-        cd {OPENFOLD3_MSA_DIR}
+        date | tee -a {log}
+        hostname | tee -a {log}
 
         snakemake \
-          --configfile {input.msa_gen_json} \
-          --cores {HHBLITS_THREADS} \
-          --rerun-incomplete
+          -s {OF3_MSA_SNAKEFILE} \
+          --configfile {input.msa_config} \
+          --cores {threads} \
+          --nolock \
+          --keep-going \
+          --latency-wait 120 \
+          --rerun-incomplete \
+          >> {log} 2>&1
+
         touch {output.done}
         """
 
-# inference
+rule create_query_json:
+    input:
+        fasta = "results/{manifest}/variants/{variant}.fasta",
+        msa_done = "results/{manifest}/openfold3/{variant}/msa/msa.done"
+    output:
+        query_json = "results/{manifest}/openfold3/{variant}/query.json"
+    run:
+        lines = [line.strip() for line in open(input.fasta) if line.strip()]
+
+        if len(lines) < 2:
+            raise ValueError(f"Invalid FASTA: {input.fasta}")
+
+        name = lines[0].replace(">", "")
+        sequence = "".join(lines[1:])
+
+        msa_path = str(
+            Path(f"results/{wildcards.manifest}/openfold3/{wildcards.variant}/msa/{name}").resolve()
+        )
+
+        query = {
+            "queries": {
+                f"{name}_HA_trimer": {
+                    "chains": [
+                        {
+                            "molecule_type": "protein",
+                            "chain_ids": HA_CHAIN_IDS,
+                            "sequence": sequence,
+                            "main_msa_file_paths": [msa_path]
+                        }
+                    ],
+                    "use_msas": True,
+                    "use_paired_msas": True,
+                    "use_main_msas": True
+                }
+            }
+        }
+
+        Path(output.query_json).parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output.query_json, "w") as out:
+            json.dump(query, out, indent=2)
+
 rule run_openfold3_prediction:
     input:
-        query_json = "results/{manifest}/openfold3/query.json"
+        query_json = "results/{manifest}/openfold3/{variant}/query.json"
     output:
-        done = "results/{manifest}/openfold3/openfold_output/prediction.done"
+        done = "results/{manifest}/openfold3/{variant}/prediction/prediction.done"
     params:
-        output_dir = "results/{manifest}/openfold3/openfold_output",
+        output_dir = "results/{manifest}/openfold3/{variant}/prediction",
         runner_yaml = RUNNER_YAML
+    resources:
+        inference_slots = 1
+    log:
+        "results/{manifest}/openfold3/{variant}/logs/prediction.log"
     shell:
         """
         mkdir -p {params.output_dir}
-
+        mkdir -p results/{wildcards.manifest}/openfold3/{wildcards.variant}/logs
+        date | tee -a {log}
+        hostname | tee -a {log}
+        nvidia-smi | tee -a {log}
         run_openfold predict \
           --query_json {input.query_json} \
           --use_msa_server=False \
           --output_dir {params.output_dir} \
-          --runner_yaml {params.runner_yaml}
+          --runner_yaml {params.runner_yaml} \
+          >> {log} 2>&1
 
         touch {output.done}
         """
-# qc
 
-rule check_qc:
+rule manifest_msa_complete:
     input:
-        plddt = "results/{manifest}/reports/plddt.txt"
+        all_msa_done
     output:
-        flag = "results/{manifest}/qc/passed.flag"
-    params:
-        threshold = 70.0
-    run:
-        Path(f"results/{wildcards.manifest}/qc").mkdir(parents=True, exist_ok=True)
-
-        score = float(open(input.plddt).read().strip())
-
-        if score < params.threshold:
-            raise ValueError(
-                f"QC threshold not met for {wildcards.manifest}: {score}"
-            )
-        shell("touch {output.flag}")
-
-# ha1 extraction
-
-rule extract_ha1:
-    input:
-        pdb = "results/{manifest}/prediction/model.pdb",
-        qc = "results/{manifest}/qc/passed.flag"
-    output:
-        ha1 = "results/{manifest}/ha1/ha1_only.pdb"
+        done = "results/{manifest}/openfold3/msa.done"
     shell:
-        """
-        mkdir -p results/{wildcards.manifest}/ha1
-        python scripts/extract_ha1.py {input.pdb} > {output.ha1}
-        """
+        "touch {output.done}"
 
-rule archive_full_pdb:
+
+rule manifest_prediction_complete:
     input:
-        pdb = "results/{manifest}/prediction/model.pdb"
+        all_prediction_done
     output:
-        archived = "results/{manifest}/archive/full_length.pdb"
+        done = "results/{manifest}/openfold3/manifest.done"
     shell:
-        """
-        mkdir -p results/{wildcards.manifest}/archive
-        cp {input.pdb} {output.archived}
-        """
-
-rule rosetta_score_ha1:
-    input:
-        ha1 = "results/{manifest}/ha1/ha1_only.pdb"
-    output:
-        score = "results/{manifest}/ha1/score.sc"
-    shell:
-        """
-        rosetta_score.linuxgccrelease \
-          -s {input.ha1} \
-          -out:file:scorefile {output.score}
-        """
-
-rule rmsd_maxsub_ha1:
-    input:
-        ha1 = "results/{manifest}/ha1/ha1_only.pdb"
-    output:
-        metrics = "results/{manifest}/ha1/rmsd_maxsub.txt"
-    shell:
-        """
-        python scripts/calc_rmsd_maxsub.py {input.ha1} > {output.metrics}
-        """
-
-rule rosetta_relax:
-    input:
-        ha1 = "results/{manifest}/ha1/ha1_only.pdb"
-    output:
-        relaxed = "results/{manifest}/ha1/relaxed.pdb"
-    shell:
-        """
-        rosetta_relax.linuxgccrelease \
-          -s {input.ha1} \
-          -out:path:pdb results/{wildcards.manifest}/ha1
-
-        mv results/{wildcards.manifest}/ha1/*relaxed*.pdb {output.relaxed}
-        """
-
-rule select_best_ha1:
-    input:
-        original = "results/{manifest}/ha1/ha1_only.pdb",
-        relaxed = "results/{manifest}/ha1/relaxed.pdb",
-        score = "results/{manifest}/ha1/score.sc",
-        metrics = "results/{manifest}/ha1/rmsd_maxsub.txt",
-        archived = "results/{manifest}/archive/full_length.pdb"
-    output:
-        selected = "results/{manifest}/final/ha1_selected.pdb"
-    shell:
-        """
-        mkdir -p results/{wildcards.manifest}/final
-
-        python scripts/select_best.py \
-          --original {input.original} \
-          --relaxed {input.relaxed} \
-          --score {input.score} \
-          --metrics {input.metrics} \
-          --out {output.selected}
-        """
+        "touch {output.done}"
