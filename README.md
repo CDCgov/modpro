@@ -188,6 +188,12 @@ flowchart TB
  ```
 Pipeline logging and reporting is orchestrated by Nifi, which pulls from the Snakemake-generated JSON logs and posts to HDFS in near real-time. These can be accessed by SQL query of the CDP database: protein_modeling.modpro.logging.
 
+Nifi Pipeline that pulls variant hashes from REFSYS and creates manifest, posted to /scicomp/groups/modpro/manifests, thereby triggering openfold3 job managed by snakemake.
+https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=881e3d30-341b-1bdc-a753-bbe492b171d4&componentIds=a2643cfd-cb43-1144-ab71-ec7a12eaa769
+
+Nifi Pipeline that posts to HDFS, including logging, data and reports. 
+https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=416d35ee-136d-164d-8b00-8c9645776218&componentIds=
+
 DAGs for the Monday/Thursday Snakemake pipelines:
 
 <svg width="800" height="1000" xmlns="http://www.w3.org/2000/svg">
