@@ -1,0 +1,82 @@
+modpro workflow summary
+
+basic architecture:
+NiFi → monday/thursday manifests deposited on cron → monitor script triggers snakemake pipes → Snakemake Mondays pipeline (OpenFold3)
+Snakemake Thursdays pipeline (Rosetta/QC) → Glyc/Epitope/SD data
+→ results/logging_qc + results/final
+→ NiFi → HDFS
+
+Mondays/OpenFold3 pipeline:
+1. NiFi pulls variant_hash + aa_seq CSV data on mondays from refsys
+2. Groovy script converts CSV rows into FASTA-ish manifests:
+   >variant_hash
+   AA_SEQUENCE
+3. Manifest written to manifests/*.csv
+4. monitor_manifests.py watches for new .csv manifests
+5. Trigger Snakefile-mondays
+6. split_manifest checkpoint:
+   - creates one FASTA per variant
+   - writes variants.json
+7. create msa_config.json per variant
+8. run OpenFold3 MSA Snakefile
+   - 2 concurrent MSA jobs
+9. create query.json
+10. run OpenFold3 inference
+   - 1 concurrent inference job <must be run on scbs-vsdb-01 due to gpu constraint>
+11. outputs:
+   results/<manifest>/openfold3/
+   results/<manifest>/logs/
+
+random notes:
+- OpenFold3 MSA Snakefile path:
+  /scicomp/groups/modpro/openfold3/openfold-3/scripts/snakemake_msa/MSA_Snakefile
+- all logs centralized under:
+  results/<manifest>/logs/
+- failure emails sent to qxa4@cdc.gov
+- monitor exits on failure
+
+Thursdays/Rosetta pipeline:
+Nifi SQL pull from protein_modeling.logging_qc where variant_hash status is OF3_SUCCESS and not PUBLISHED
+publishes a list of pdb names in manifests/*.tsv file
+triggers the Snakefile-thursdays run from monitor_manifests.py
+
+Thursdays snake job workflow
+1. extract chain A and remove HA2
+2. per-residue pLDDT and energy score extraction
+3. Rosetta scoring/scripts
+4. per-residue energetics
+5. CA RMSD + MaxSub vs subtype reference
+6. Rosetta relax
+7. Pocket relax
+8. qualitative metrics
+9. choose best model by energy/RMSD
+10. glyc/epitope/structural metrics
+11. write outputs:
+    results/logging_qc/
+    results/final/
+12. NiFi posts to HDFS
+
+Rosetta binaries, doesn't depend on rosetta on scicomp
+Located:
+  /scicomp/groups/ID-VSDB/GAT/rosetta.binary.linux.release-371/main/source
+
+rosetta scripts:
+- relax.static.linuxgccrelease
+- pocket_relax.static.linuxgccrelease
+- rosetta_scripts.static.linuxgccrelease
+- rosetta_scripts_jd3.static.linuxgccrelease
+- thread variants also available
+
+Monitoring:
+Combined monitor script:
+- watches manifests/*.csv → Mondays pipeline
+- watches manifests/*.tsv → Thursdays pipeline
+
+this is where I stopped, the pipeline is monitoring for tsv and nifi can pull variant hashes.
+I created the protein_modeling.logging_qc table. 
+
+next steps:
+- finalize HA1/Rosetta
+- implement data gen scripts
+- think about whether to add NAs or keep HA specific
+- think about whether to incorporate RMSD
