@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# tmux new -s modpro-of3
+# python monitor_manifests.py | tee monitor.log
 
 from pathlib import Path
 import subprocess
@@ -13,13 +15,9 @@ SNAKEFILE = WORKFLOW_DIR / "Snakefile"
 MANIFEST_DIR = WORKFLOW_DIR / "manifests"
 DONE_DIR = MANIFEST_DIR / ".processed"
 DONE_DIR.mkdir(exist_ok=True)
-<<<<<<< HEAD
 WORKFLOW_DIR = Path("/scicomp/groups/modpro").resolve()
-
-=======
 EMAIL_TO = "qxa4@cdc.gov"
 EMAIL_FROM = "qxa4@cdc.gov"
->>>>>>> 5c3193d (update monitor script)
 POLL_SECONDS = 10
 CORES = "8"
 
@@ -70,28 +68,20 @@ Snakemake failed and the manifest monitor is exiting.
 
 Host:
 {socket.gethostname()}
-
 Workflow directory:
 {WORKFLOW_DIR}
-
 Manifest:
 {path}
-
 Target:
 {target}
-
 Exit code:
 {result.returncode}
-
 Command:
 {' '.join(cmd)}
-
 STDOUT:
 {result.stdout}
-
 STDERR:
 {result.stderr}
-
 A failed marker was written to:
 {failed_marker}
 """
