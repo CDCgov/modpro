@@ -4,8 +4,8 @@
 """
 Usage notes:
 snakemake \
-  --snakefile Snakefile.openfold \
-  --cores 16 \
+  --snakefile Snakefile \
+  --cores 64 \
   --printshellcmds \
   --reason \
   --rerun-incomplete \
