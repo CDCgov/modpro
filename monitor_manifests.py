@@ -11,7 +11,7 @@ import socket
 import sys
 
 WORKFLOW_DIR = Path("/scicomp/groups/modpro").resolve()
-SNAKEFILE = WORKFLOW_DIR / "Snakefile"
+SNAKEFILE = WORKFLOW_DIR / "Snakefile-mondays"
 MANIFEST_DIR = WORKFLOW_DIR / "manifests"
 DONE_DIR = MANIFEST_DIR / ".processed"
 DONE_DIR.mkdir(exist_ok=True)
