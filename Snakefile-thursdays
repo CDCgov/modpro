@@ -22,6 +22,8 @@ from email.message import EmailMessage
 
 REF_DIR = "refs"
 
+configfile: "config/thursdays.yaml"
+
 REFERENCE_BY_SUBTYPE = {
     "H3": f"{REF_DIR}/H3_reference.pdb",
     "H3-seasonal": f"{REF_DIR}/H3_seasonal.pdb",
@@ -30,6 +32,18 @@ REFERENCE_BY_SUBTYPE = {
     "Hvic": f"{REF_DIR}/Hvic_reference.pdb",
     "Hvic-seasonal": f"{REF_DIR}/Hvic_seasonal.pdb"
 }
+"""
+Notes on defining the HA1: definitions of the HA1 are kept in line with dais ribosome.
+
+| Reference  | NT coords | Full-protein AA coords |
+| ---------- | --------: | ---------------------: |
+| BRISBANE60 |  46..1086 |                16..362 |
+| CALI07     |  52..1032 |                18..344 |
+| HK4801     |  49..1035 |                17..345 |
+| PHUKET3073 |  46..1083 |                16..361 |
+
+"""
+
 MANIFEST_DIR = "manifests/rosetta_runs"
 
 WORK_DIR = "results/thursday"

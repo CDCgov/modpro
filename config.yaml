@@ -1,0 +1,110 @@
+paths:
+  workflow_dir: "/scicomp/groups/modpro"
+
+  manifests_dir: "manifests"
+  rosetta_manifests_dir: "manifests/rosetta_runs"
+
+  results_dir: "results"
+  logging_qc_dir: "results/logging_qc"
+  final_dir: "results/final"
+  thursday_work_dir: "results/thursday"
+
+  scripts_dir: "scripts"
+
+  rosetta_ready_dir: "/scicomp/groups/modpro/rosetta_ready"
+  refs_dir: "/scicomp/groups/modpro/rosetta_ready/refs"
+
+openfold3:
+  root: "/scicomp/groups/modpro/openfold3"
+  scripts_dir: "/scicomp/groups/modpro/openfold3/openfold-3/scripts"
+  msa_dir: "/scicomp/groups/modpro/openfold3/openfold-3/scripts/snakemake_msa"
+  msa_snakefile: "/scicomp/groups/modpro/openfold3/openfold-3/scripts/snakemake_msa/MSA_Snakefile"
+  env: "/scicomp/groups/ID-VSDB/GAT/shared_conda_envs/of3-aln-env"
+  db_path: "/scicomp/groups/ID-VSDB/GAT/of3_dbs"
+
+rosetta:
+  bin_dir: "/scicomp/groups/ID-VSDB/GAT/rosetta.binary.linux.release-371/main/source"
+
+  relax_binary: "relax.static.linuxgccrelease"
+  relax_thread_binary: "relax.cxx11thread.linuxgccrelease"
+
+  pocket_relax_binary: "pocket_relax.static.linuxgccrelease"
+  pocket_relax_thread_binary: "pocket_relax.cxx11thread.linuxgccrelease"
+
+  scripts_binary: "rosetta_scripts.static.linuxgccrelease"
+  scripts_thread_binary: "rosetta_scripts.cxx11thread.linuxgccrelease"
+
+  scripts_jd3_binary: "rosetta_scripts_jd3.static.linuxgccrelease"
+  scripts_jd3_thread_binary: "rosetta_scripts_jd3.cxx11thread.linuxgccrelease"
+
+email:
+  to: "qxa4@cdc.gov"
+  from: "qxa4@cdc.gov"
+
+monday:
+  msa_cores: 32
+  jackhmmer_threads: 16
+  hhblits_threads: 32
+  chain_ids:
+    HA: ["A", "B", "C"]
+    NA: ["A", "B", "C", "D"]
+  qc_threshold: 75.0
+  runner_yaml: "config/runner.yaml"
+
+thursday:
+  cores: 32
+
+refs:
+  subtypes:
+    H1:
+      reference: "H1_HA_reference.pdb"
+      seasonal: "H1_HA_seasonal.pdb"
+      ha1_start: 18
+      ha1_end: 344
+
+    H3:
+      reference: "H3_HA_reference.pdb"
+      seasonal: "H3_HA_seasonal.pdb"
+      ha1_start: 17
+      ha1_end: 345
+
+    Bvic:
+      reference: "B_HA_reference.pdb"
+      seasonal: "B_HA_seasonal.pdb"
+      ha1_start: 16
+      ha1_end: 362
+
+    H5:
+      reference: "H5_HA_reference.pdb"
+      seasonal: "H5_HA_seasonal.pdb"
+      ha1_start:
+      ha1_end:
+
+subtype_aliases:
+  H1:
+    - H1
+    - H1N1
+    - H1-seasonal
+
+  H3:
+    - H3
+    - H3N2
+    - H3-seasonal
+
+  Bvic:
+    - B
+    - Bvic
+    - B/Vic
+    - BVictoria
+    - B/Victoria
+    - Hvic
+    - H/Vic
+    - HVictoria
+    - H/Victoria
+    - Victoria
+    - Vic
+
+  H5:
+    - H5
+    - H5N1
+    - H5Nx

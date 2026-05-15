@@ -39,10 +39,12 @@ import socket
 import smtplib
 from email.message import EmailMessage
 
-EMAIL_TO = "qxa4@cdc.gov"
-EMAIL_FROM = "qxa4@cdc.gov"
+configfile: "config.yaml"
 
-MANIFEST_DIR = "manifests"
+EMAIL_TO = config["email"]["to"]
+EMAIL_FROM = config["email"]["from"]
+
+MANIFEST_DIR = config["paths"]["manifest_dir"]
 
 OPENFOLD3_ROOT = "/scicomp/groups/modpro/openfold3"
 OPENFOLD3_SCRIPTS = f"{OPENFOLD3_ROOT}/openfold-3/scripts"
