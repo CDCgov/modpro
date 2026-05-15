@@ -20,6 +20,16 @@ import smtplib
 from pathlib import Path
 from email.message import EmailMessage
 
+REF_DIR = "refs"
+
+REFERENCE_BY_SUBTYPE = {
+    "H3": f"{REF_DIR}/H3_reference.pdb",
+    "H3-seasonal": f"{REF_DIR}/H3_seasonal.pdb",
+    "H1": f"{REF_DIR}/H1_reference.pdb",
+    "H1-seasonal": f"{REF_DIR}/H1_seasonal.pdb",
+    "Hvic": f"{REF_DIR}/Hvic_reference.pdb",
+    "Hvic-seasonal": f"{REF_DIR}/Hvic_seasonal.pdb"
+}
 MANIFEST_DIR = "manifests/rosetta_runs"
 
 WORK_DIR = "results/thursday"
@@ -77,15 +87,70 @@ Centralized logs:
 Check the most recent Snakemake log under:
 .snakemake/log/
 """
-
     try:
         send_failure_email(subject, body)
     except Exception as e:
         print(f"Failed to send failure email: {e}")
 
+def normalize_subtype(subtype):
+    s = subtype.strip().lower().replace("_", "-").replace(" ", "")
+    if s.startswith("h3"):
+        return "H3"
+    if s.startswith("h1"):
+        return "H1"
+    if s in [
+        "bvic",
+        "b/vic",
+        "bvictoria",
+        "b/victoria",
+        "hvic",
+        "h/vic",
+        "hvictoria",
+        "h/victoria",
+        "victoria",
+        "vic"
+    ]:
+        return "Bvic"
+    return "UNKNOWN"
+
+def read_run_metadata(run):
+    meta_path = Path(f"{MANIFEST_DIR}/{run}.txt")
+
+    if not meta_path.exists():
+        raise FileNotFoundError(f"Missing metadata file: {meta_path}")
+
+    rows = []
+    with open(meta_path) as handle:
+        header = handle.readline().strip().split(",")
+
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+
+            values = line.split(",", 2)
+            row = dict(zip(header, values))
+            rows.append(row)
+    if not rows:
+        raise ValueError(f"No metadata rows found in {meta_path}")
+    proteins = sorted(set(r.get("protein", "").strip() for r in rows if r.get("protein", "").strip()))
+    subtypes = sorted(set(r.get("subtype", "").strip() for r in rows if r.get("subtype", "").strip()))
+    protein = proteins[0] if proteins else "UNKNOWN"
+    normalized_subtypes = [
+        normalize_subtype(s)
+        for s in subtypes
+    ]
+    if "H3" in normalized_subtypes:
+        subtype = "H3"
+    elif "H1" in normalized_subtypes:
+        subtype = "H1"
+    elif "Bvic" in normalized_subtypes:
+        subtype = "Bvic"
+    else:
+        subtype = "UNKNOWN"
+        }
 
 # one rule to rule them all
-
 rule all:
     input:
         []
@@ -94,7 +159,8 @@ rule all:
 # based on manifest.done file, build list of tasks
 checkpoint load_rosetta_manifest:
     input:
-        manifest = f"{MANIFEST_DIR}/{{run}}.json"
+        manifest = f"{MANIFEST_DIR}/{{run}}.json",
+        metadata = f"{MANIFEST_DIR}/{{run}}.txt"
     output:
         outdir = directory(f"{WORK_DIR}/{{run}}/inputs")
     run:
@@ -104,9 +170,11 @@ checkpoint load_rosetta_manifest:
             data = json.load(handle)
         if "variants" not in data:
             raise ValueError(f"Manifest missing variants list: {input.manifest}")
+        metadata = read_run_metadata(wildcards.run)
         with open(outdir / "variants.json", "w") as out:
             json.dump(data["variants"], out, indent=2)
-
+        with open(outdir / "metadata.json", "w") as out:
+            json.dump(metadata, out, indent=2)
 
 def get_variants(wildcards):
     ckpt = checkpoints.load_rosetta_manifest.get(run=wildcards.run)
@@ -124,6 +192,18 @@ def variant_full_length_pdb(wildcards):
         if v["variant_hash"] == wildcards.variant:
             return v["full_length_pdb"]
     raise ValueError(f"Variant not found in manifest: {wildcards.variant}")
+
+def metadata_file(wildcards):
+    return f"{MANIFEST_DIR}/{wildcards.run}.txt"
+
+def reference_for_run(wildcards):
+    metadata = read_run_metadata(wildcards.run)
+    subtype = metadata["subtype"]
+    if subtype not in REFERENCE_BY_SUBTYPE:
+        raise ValueError(
+            f"Unsupported or missing subtype '{subtype}' for run {wildcards.run}"
+        )
+    return REFERENCE_BY_SUBTYPE[subtype]
 
 def all_final_reports(wildcards):
     variants = get_variants(wildcards)
@@ -199,7 +279,6 @@ rule extract_per_residue_plddt:
     shell:
         """
         mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
-
         {{
           echo "extract per-residue pLDDT starting"
           date
@@ -234,7 +313,6 @@ rule rosetta_all_scripts:
         """
         mkdir -p {WORK_DIR}/{wildcards.run}/{wildcards.variant}/scores
         mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
-
         {{
           echo "rosetta scripts starting"
           date
@@ -244,36 +322,30 @@ rule rosetta_all_scripts:
           echo "pdb={input.pdb}"
           echo "rosetta_bin={ROSETTA_BIN}"
         }} >> {log} 2>&1
-
         echo "running rosetta_scripts.static.linuxgccrelease" >> {log}
         {ROSETTA_SCRIPTS} \
           -s {input.pdb} \
           -out:file:scorefile {output.score_static} \
           >> {log} 2>&1 || true
-
         echo "running rosetta_scripts.cxx11thread.linuxgccrelease" >> {log}
         {ROSETTA_SCRIPTS_THREAD} \
           -s {input.pdb} \
           -out:file:scorefile {output.score_thread} \
           >> {log} 2>&1 || true
-
         echo "running rosetta_scripts_jd3.static.linuxgccrelease" >> {log}
         {ROSETTA_SCRIPTS_JD3} \
           -s {input.pdb} \
           -out:file:scorefile {output.score_jd3_static} \
           >> {log} 2>&1 || true
-
         echo "running rosetta_scripts_jd3.cxx11thread.linuxgccrelease" >> {log}
         {ROSETTA_SCRIPTS_JD3_THREAD} \
           -s {input.pdb} \
           -out:file:scorefile {output.score_jd3_thread} \
           >> {log} 2>&1 || true
-
         {{
           echo "rosetta scripts complete"
           date
         }} >> {log} 2>&1
-
         touch {output.done}
         """
 #extract per resi energy
@@ -313,17 +385,17 @@ rule extract_rosetta_per_residue_energy:
 # compare to reference
 rule compare_to_reference:
     input:
-        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/ha1/chainA_HA1.pdb"
+        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/ha1/chainA_HA1.pdb",
+        metadata = f"{MANIFEST_DIR}/{{run}}.txt"
     output:
         metrics = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.reference_compare.tsv"
     params:
-        reference = lambda wildcards: f"{REFERENCE_PDB_DIR}/{wildcards.run}.reference.pdb"
+        reference = reference_for_run
     log:
         f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.reference_compare.log"
     shell:
         """
         mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
-
         {{
           echo "reference comparison starting"
           date
@@ -331,10 +403,10 @@ rule compare_to_reference:
           echo "run={wildcards.run}"
           echo "variant={wildcards.variant}"
           echo "pdb={input.pdb}"
+          echo "metadata={input.metadata}"
           echo "reference={params.reference}"
           echo "atoms=CA"
         }} >> {log} 2>&1
-
         python scripts/calc_rmsd_maxsub.py \
           --mobile {input.pdb} \
           --reference {params.reference} \
@@ -342,7 +414,6 @@ rule compare_to_reference:
           --out {output.metrics} \
           --allow-nulls \
           >> {log} 2>&1
-
         {{
           echo "reference comparison complete"
           date
