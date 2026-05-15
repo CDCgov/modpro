@@ -46,24 +46,22 @@ EMAIL_FROM = config["email"]["from"]
 
 MANIFEST_DIR = config["paths"]["manifest_dir"]
 
-OPENFOLD3_ROOT = "/scicomp/groups/modpro/openfold3"
-OPENFOLD3_SCRIPTS = f"{OPENFOLD3_ROOT}/openfold-3/scripts"
-OPENFOLD3_MSA_DIR = f"{OPENFOLD3_SCRIPTS}/snakemake_msa"
-OPENFOLD3_MSA_SNAKEFILE = f"{OPENFOLD3_MSA_DIR}/MSA_Snakefile"
+OPENFOLD3_ROOT = config["openfold3"]["root"]
+OPENFOLD3_SCRIPTS = config["openfold3"]["scripts_dir"]
+OPENFOLD3_MSA_DIR = config["openfold3"]["msa_dir"]
+OPENFOLD3_MSA_SNAKEFILE = config["openfold3"]["msa_snakefile"]
 
-OPENFOLD_ENV = "/scicomp/groups/ID-VSDB/GAT/shared_conda_envs/of3-aln-env"
-OPENFOLD_DB_PATH = "/scicomp/groups/ID-VSDB/GAT/of3_dbs"
+OPENFOLD_ENV = config["openfold3"]["env"]
+OPENFOLD_DB_PATH = config["openfold3"]["db_path"]
 
-MSA_CORES = 32
-JACKHMMER_THREADS = 16
-HHBLITS_THREADS = 32
+MSA_CORES = config["monday"]["msa_cores"]
+JACKHMMER_THREADS = config["monday"]["jackhmmer_threads"]
+HHBLITS_THREADS = config["monday"]["hhblits_threads"]
 RUNNER_YAML = "config/runner.yaml"
 
 HA_CHAIN_IDS = ["A", "B", "C"]   # trimer
 NA_CHAIN_IDS = ["A", "B", "C", "D"]   # tetramer
-QC_THRESHOLD = 75.0
-EMAIL_TO = "qxa4@cdc.gov"
-EMAIL_FROM = "qxa4@cdc.gov"
+QC_THRESHOLD = config["monday"]["qc_threshold"]
 
 def send_failure_email(subject, body):
     msg = EmailMessage()
