@@ -6,7 +6,36 @@ The MODPRO pipeline was developed by the CDC's Influenza Division to analyze Alp
 
 Structural bioinformatics pipeline orchestrated by a weekly (Mondays) NiFi cron job that queries ref_sys database top_model_priority table to identify high-priority HA variants not yet predicted by Openfold3 but targeted for experimentation by the laboratory. Pipeline then generates a run manifest after checking HDFS for duplicates and logs metadata before publishing manifest to GWA, triggering Snakemake structural prediction pipeline. The planned update includes database cleanup, automated variant processing, enhanced RBS epitope analysis with sialic acid binding prediction feature, and a strategic shift to HA1-focused relaxation and analytics. 
 
-For each variant, amino acid sequences are retrieved from CDP, converted to fasta files, submitted for MSA generation, OpenFold3 structure prediction, and phenotypic analyses [glycosylation distance calculation, RBS epitopes, structural distance calculations etc] all the while capturing QC metrics such as full-length pLDDT, logging execution and CDP publication status. Full-length structures are archived, followed by HA1-focused processing that includes chain- and domain- trimming, Rosetta scoring, RMS/MaxSub evaluation, biophysical relaxation, with decision points enforcing QC thresholds and selecting improved structures based on logged improvement of energy score and RMSD. All intermediate and final metrics recorded in protein_modeling “logging” and “qc” tables. NiFi handles observability and quality control by ingesting checkpointed outputs from Snakemake, publishing validated files to HDFS, and writing SQL metadata and run results. The pipeline distinguishes clearly between compute and publication states, where “compute_status” tracks scientific execution outcomes (compute_status: PENDING, RUNNING, SUCCESS, QC_FAILED, FAILED) and “publication_status” tracks data delivery (publication_status:  NOT_READY, READY, POSTING, HDFS_POSTED, SQL_POSTED, COMPLETE, PUBLISH_FAILED), enabling robust retry, auditability, and reliable end-to-end processing.
+For each variant, amino acid sequences are retrieved from CDP, converted to fasta files, submitted for MSA generation, OpenFold3 structure prediction, and phenotypic analyses [glycosylation distance calculation, RBS epitopes, structural distance calculations etc] all the while capturing QC metrics such as full-length pLDDT, logging execution and CDP publication status. Full-length structures are archived, followed by HA1-focused processing that includes chain- and domain- trimming, Rosetta scoring, RMS/MaxSub evaluation, biophysical relaxation, with decision points enforcing QC thresholds and selecting improved structures based on logged improvement of energy score and RMSD. All intermediate and final metrics recorded in protein_modeling “logging” and “qc” tables. NiFi handles observability and quality control by ingesting checkpointed outputs from Snakemake, publishing validated files to HDFS, and writing SQL metadata and run results. The pipeline distinguishes clearly between compute and publication states, enabling robust retry, auditability, and reliable end-to-end processing.
+
+
+protein_modeling.logging_qc.compute_status
+tracks scientific execution outcomes 
+(compute_status: 
+MSA_PENDING, 
+MSA_SUCCESS, 
+MSA_FAILED,
+INFERENCE_PENDING, 
+INFERENCE_SUCCESS, 
+INFERENCE_FAILED,
+ROSETTA_SUCCESS,
+ROSETTA_FAIL,
+QC_SUCCESS,
+QC_FAIL,
+GLYC_DIST-PASSED,
+GETCLONTACTS-PASSED,
+FITSCAPE-PASSED,
+EPITOPE-PASSED,
+DOKKINGS-PASSED
+)
+
+protein_modeling.logging_qc.publication_status 
+tracks data delivery 
+(publication_status:  
+PASS,
+FAIL
+)
+
 
 Benchmarks:
 Monomer/Trimer dataset of ~10 recent crystal structures for H1, H3, Hvic
