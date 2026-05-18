@@ -22,7 +22,7 @@ from email.message import EmailMessage
 
 REF_DIR = "refs"
 
-configfile: "config/thursdays.yaml"
+configfile: "config.yaml"
 
 REFERENCE_BY_SUBTYPE = {
     "H3": f"{REF_DIR}/H3_reference.pdb",
@@ -44,30 +44,26 @@ Notes on defining the HA1: definitions of the HA1 are kept in line with dais rib
 
 """
 
-MANIFEST_DIR = "manifests/rosetta_runs"
+MANIFEST_DIR = "manifests"
 
 WORK_DIR = "results/thursday"
 LOGGING_QC_DIR = "results/logging_qc"
 FINAL_DIR = "results/final"
 
-REFERENCE_PDB_DIR = "references"
+REFERENCE_PDB_DIR = "refs"
 
-EMAIL_TO = "qxa4@cdc.gov"
-EMAIL_FROM = "qxa4@cdc.gov"
+EMAIL_TO = config["email"]["to"]
+EMAIL_FROM = config["email"]["to"]
 
-ROSETTA_BIN = "/scicomp/groups/ID-VSDB/GAT/rosetta.binary.linux.release-371/main/source"
-
-ROSETTA_RELAX = f"{ROSETTA_BIN}/relax.static.linuxgccrelease"
-ROSETTA_RELAX_THREAD = f"{ROSETTA_BIN}/relax.cxx11thread.linuxgccrelease"
-
-ROSETTA_POCKET_RELAX = f"{ROSETTA_BIN}/pocket_relax.static.linuxgccrelease"
-ROSETTA_POCKET_RELAX_THREAD = f"{ROSETTA_BIN}/pocket_relax.cxx11thread.linuxgccrelease"
-
-ROSETTA_SCRIPTS = f"{ROSETTA_BIN}/rosetta_scripts.static.linuxgccrelease"
-ROSETTA_SCRIPTS_THREAD = f"{ROSETTA_BIN}/rosetta_scripts.cxx11thread.linuxgccrelease"
-
-ROSETTA_SCRIPTS_JD3 = f"{ROSETTA_BIN}/rosetta_scripts_jd3.static.linuxgccrelease"
-ROSETTA_SCRIPTS_JD3_THREAD = f"{ROSETTA_BIN}/rosetta_scripts_jd3.cxx11thread.linuxgccrelease"
+ROSETTA_BIN = config["rosetta"]["bin_dir"]
+ROSETTA_RELAX = config["rosetta"][" relax_binary"]
+ROSETTA_RELAX_THREAD = config["rosetta"][" relax_thread_binary"]
+ROSETTA_POCKET_RELAX = config["rosetta"]["pocket_relax_binary"]
+ROSETTA_POCKET_RELAX_THREAD = config["rosetta"]["pocket_relax_thread_binary"]
+ROSETTA_SCRIPTS = config["rosetta"]["scripts_binary"]
+ROSETTA_SCRIPTS_THREAD = config[""][" scripts_thread_binary"]
+ROSETTA_SCRIPTS_JD3 = config["rosetta"]["scripts_jd3_binary"]
+ROSETTA_SCRIPTS_JD3_THREAD = config["rosetta"]["scripts_jd3_thread_binary"]
 
 # fail email
 def send_failure_email(subject, body):
