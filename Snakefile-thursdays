@@ -4,9 +4,10 @@
 Thursday/Rosetta pipeline
 
 Usage:
+<note, use -n flag for dry run!>
 snakemake \
-  --snakefile Snakefile-thursday \
-  results/final/<run>/thursday.done \
+  --snakefile Snakefile-thursdays \
+  results/final/<run>/<variant>/variant.done \
   --cores 32 \
   --printshellcmds \
   --rerun-incomplete \
@@ -14,71 +15,77 @@ snakemake \
   --latency-wait 120
 """
 
+import csv
 import json
 import socket
 import smtplib
 from pathlib import Path
 from email.message import EmailMessage
 
-REF_DIR = "refs"
-
 configfile: "config.yaml"
 
-REFERENCE_BY_SUBTYPE = {
-    "H3": f"{REF_DIR}/H3_reference.pdb",
-    "H3-seasonal": f"{REF_DIR}/H3_seasonal.pdb",
-    "H1": f"{REF_DIR}/H1_reference.pdb",
-    "H1-seasonal": f"{REF_DIR}/H1_seasonal.pdb",
-    "Hvic": f"{REF_DIR}/Hvic_reference.pdb",
-    "Hvic-seasonal": f"{REF_DIR}/Hvic_seasonal.pdb"
-}
-"""
-Notes on defining the HA1: definitions of the HA1 are kept in line with dais ribosome.
-
-| Reference  | NT coords | Full-protein AA coords |
-| ---------- | --------: | ---------------------: |
-| BRISBANE60 |  46..1086 |                16..362 |
-| CALI07     |  52..1032 |                18..344 |
-| HK4801     |  49..1035 |                17..345 |
-| PHUKET3073 |  46..1083 |                16..361 |
-
-"""
-
-MANIFEST_DIR = "manifests"
+REF_DIR = config["paths"]["refs_dir"]
+METADATA_DIR = config["paths"]["manifest_dir"]
+ROSETTA_READY_DIR = config["paths"]["rosetta_ready_dir"]
+ROSETTA_MANIFEST_DIR = config["paths"]["rosetta_manifests_dir"]
 
 WORK_DIR = "results/thursday"
 LOGGING_QC_DIR = "results/logging_qc"
 FINAL_DIR = "results/final"
-
-REFERENCE_PDB_DIR = "refs"
+TABLE_DIR = "results/tables"
 
 EMAIL_TO = config["email"]["to"]
-EMAIL_FROM = config["email"]["to"]
+EMAIL_FROM = config["email"]["from"]
 
 ROSETTA_BIN = config["rosetta"]["bin_dir"]
-ROSETTA_RELAX = config["rosetta"][" relax_binary"]
-ROSETTA_RELAX_THREAD = config["rosetta"][" relax_thread_binary"]
-ROSETTA_POCKET_RELAX = config["rosetta"]["pocket_relax_binary"]
-ROSETTA_POCKET_RELAX_THREAD = config["rosetta"]["pocket_relax_thread_binary"]
-ROSETTA_SCRIPTS = config["rosetta"]["scripts_binary"]
-ROSETTA_SCRIPTS_THREAD = config[""][" scripts_thread_binary"]
-ROSETTA_SCRIPTS_JD3 = config["rosetta"]["scripts_jd3_binary"]
-ROSETTA_SCRIPTS_JD3_THREAD = config["rosetta"]["scripts_jd3_thread_binary"]
+ROSETTA_RELAX = f"{ROSETTA_BIN}/relax.static.linuxgccrelease"
+ROSETTA_SCORE = f"{ROSETTA_BIN}/score.static.linuxgccrelease"
+ROSETTA_SCORE_JD2 = f"{ROSETTA_BIN}/score_jd2.static.linuxgccrelease"
+ROSETTA_RESIDUE_ENERGY = f"{ROSETTA_BIN}/residue_energy_breakdown.static.linuxgccrelease"
 
-# fail email
 def send_failure_email(subject, body):
     msg = EmailMessage()
     msg["To"] = EMAIL_TO
     msg["From"] = EMAIL_FROM
     msg["Subject"] = subject
     msg.set_content(body)
-
     with smtplib.SMTP("localhost") as smtp:
         smtp.send_message(msg)
 
-onerror:
-    subject = "[modpro] Thursday Rosetta pipeline failed"
+def tail_file(path, n=80):
+    path = Path(path)
+    if not path.exists():
+        return f"[missing: {path}]"
+    try:
+        return "\n".join(path.read_text(errors="replace").splitlines()[-n:])
+    except Exception as e:
+        return f"[could not read {path}: {e}]"
 
+def newest_file(pattern):
+    files = list(Path(".").glob(pattern))
+    if not files:
+        return None
+    return max(files, key=lambda p: p.stat().st_mtime)
+
+def recent_rule_log_tails(n_logs=8, n_lines=80):
+    logs = sorted(
+        Path(LOGGING_QC_DIR).glob("**/*.log"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )[:n_logs]
+    if not logs:
+        return "No rule logs found."
+    return "\n".join(
+        f"\n--- tail -n {n_lines} {log_path} ---\n{tail_file(log_path, n_lines)}"
+        for log_path in logs
+        )
+onerror:
+    newest_snakemake_log = newest_file(".snakemake/log/*.snakemake.log")
+    snakemake_tail = (
+        tail_file(newest_snakemake_log, 120)
+        if newest_snakemake_log
+        else "No Snakemake log found under .snakemake/log/"
+    )
     body = f"""
 Thursday/Rosetta Snakemake pipeline failed.
 
@@ -91,172 +98,138 @@ Snakefile:
 Working directory:
 {Path.cwd()}
 
-Centralized logs:
-{LOGGING_QC_DIR}/<run>/
+Most recent Snakemake log:
+{newest_snakemake_log}
 
-Check the most recent Snakemake log under:
-.snakemake/log/
+===== Tail of Snakemake log =====
+
+{snakemake_tail}
+
+
+===== Recent rule log tails =====
+{recent_rule_log_tails(n_logs=8, n_lines=80)}
 """
     try:
-        send_failure_email(subject, body)
+        send_failure_email("[modpro] Thursday Rosetta pipeline failed", body)
     except Exception as e:
         print(f"Failed to send failure email: {e}")
 
-def normalize_subtype(subtype):
-    s = subtype.strip().lower().replace("_", "-").replace(" ", "")
-    if s.startswith("h3"):
-        return "H3"
-    if s.startswith("h1"):
-        return "H1"
-    if s in [
-        "bvic",
-        "b/vic",
-        "bvictoria",
-        "b/victoria",
-        "hvic",
-        "h/vic",
-        "hvictoria",
-        "h/victoria",
-        "victoria",
-        "vic"
-    ]:
-        return "Bvic"
-    return "UNKNOWN"
+def metadata_file(wildcards):
+    return f"{METADATA_DIR}/{wildcards.run}.txt"
 
-def read_run_metadata(run):
-    meta_path = Path(f"{MANIFEST_DIR}/{run}.txt")
+def full_length_pdb_path(run, pdb_name):
+    variant_hash = Path(pdb_name).stem
+    candidates = list(
+        Path("results").glob(
+            f"*/openfold3/{variant_hash}/prediction/{variant_hash}_HA_trimer/seed_*/*_model.pdb"
+            )
+        )
+    if not candidates:
+        candidates = list(
+            Path("results").glob(
+                f"*/openfold3/{variant_hash}/prediction/**/*.pdb"
+                )
+            )
+    if not candidates:
+        raise FileNotFoundError(f"No OpenFold PDB found for variant {variant_hash}")
+    candidates.sort(key=lambda p: p.stat().st_mtime)
+    return str(candidates[-1])
 
-    if not meta_path.exists():
-        raise FileNotFoundError(f"Missing metadata file: {meta_path}")
+def all_reference_pdbs(wildcards):
+    refs = sorted(Path(REF_DIR).glob("*.pdb"))
+    if not refs:
+        raise ValueError(f"No reference PDBs found in {REF_DIR}")
+    return [str(r) for r in refs]
 
-    rows = []
-    with open(meta_path) as handle:
-        header = handle.readline().strip().split(",")
-
-        for line in handle:
-            line = line.strip()
-            if not line:
-                continue
-
-            values = line.split(",", 2)
-            row = dict(zip(header, values))
-            rows.append(row)
-    if not rows:
-        raise ValueError(f"No metadata rows found in {meta_path}")
-    proteins = sorted(set(r.get("protein", "").strip() for r in rows if r.get("protein", "").strip()))
-    subtypes = sorted(set(r.get("subtype", "").strip() for r in rows if r.get("subtype", "").strip()))
-    protein = proteins[0] if proteins else "UNKNOWN"
-    normalized_subtypes = [
-        normalize_subtype(s)
-        for s in subtypes
-    ]
-    if "H3" in normalized_subtypes:
-        subtype = "H3"
-    elif "H1" in normalized_subtypes:
-        subtype = "H1"
-    elif "Bvic" in normalized_subtypes:
-        subtype = "Bvic"
-    else:
-        subtype = "UNKNOWN"
-        }
-
-# one rule to rule them all
-rule all:
-    input:
-        []
-
-
-# based on manifest.done file, build list of tasks
 checkpoint load_rosetta_manifest:
     input:
-        manifest = f"{MANIFEST_DIR}/{{run}}.json",
-        metadata = f"{MANIFEST_DIR}/{{run}}.txt"
+        manifest = f"{ROSETTA_MANIFEST_DIR}/{{run}}.tsv",
+        metadata = metadata_file
     output:
         outdir = directory(f"{WORK_DIR}/{{run}}/inputs")
     run:
         outdir = Path(output.outdir)
         outdir.mkdir(parents=True, exist_ok=True)
+        variants = []
         with open(input.manifest) as handle:
-            data = json.load(handle)
-        if "variants" not in data:
-            raise ValueError(f"Manifest missing variants list: {input.manifest}")
-        metadata = read_run_metadata(wildcards.run)
+            for line in handle:
+                pdb_name = line.strip()
+                if not pdb_name:
+                    continue
+                variant_hash = Path(pdb_name).stem
+                variants.append(
+                    {
+                        "variant_hash": variant_hash,
+                        "full_length_pdb": full_length_pdb_path(
+                            wildcards.run, pdb_name
+                        ),
+                    }
+                )
+        if not variants:
+            raise ValueError(f"No variants found in manifest: {input.manifest}")
         with open(outdir / "variants.json", "w") as out:
-            json.dump(data["variants"], out, indent=2)
-        with open(outdir / "metadata.json", "w") as out:
-            json.dump(metadata, out, indent=2)
+            json.dump(variants, out, indent=2)
 
 def get_variants(wildcards):
     ckpt = checkpoints.load_rosetta_manifest.get(run=wildcards.run)
-    variants_json = Path(ckpt.output.outdir) / "variants.json"
-    with open(variants_json) as handle:
+    with open(Path(ckpt.output.outdir) / "variants.json") as handle:
         variants = json.load(handle)
     return [v["variant_hash"] for v in variants]
 
 def variant_full_length_pdb(wildcards):
     ckpt = checkpoints.load_rosetta_manifest.get(run=wildcards.run)
-    variants_json = Path(ckpt.output.outdir) / "variants.json"
-    with open(variants_json) as handle:
+    with open(Path(ckpt.output.outdir) / "variants.json") as handle:
         variants = json.load(handle)
     for v in variants:
         if v["variant_hash"] == wildcards.variant:
             return v["full_length_pdb"]
     raise ValueError(f"Variant not found in manifest: {wildcards.variant}")
 
-def metadata_file(wildcards):
-    return f"{MANIFEST_DIR}/{wildcards.run}.txt"
-
-def reference_for_run(wildcards):
-    metadata = read_run_metadata(wildcards.run)
-    subtype = metadata["subtype"]
-    if subtype not in REFERENCE_BY_SUBTYPE:
-        raise ValueError(
-            f"Unsupported or missing subtype '{subtype}' for run {wildcards.run}"
-        )
-    return REFERENCE_BY_SUBTYPE[subtype]
-
-def all_final_reports(wildcards):
-    variants = get_variants(wildcards)
+def all_variant_done_files(wildcards):
     return expand(
-        f"{FINAL_DIR}/{{run}}/{{variant}}/final_metrics.json",
+        f"{FINAL_DIR}/{{run}}/{{variant}}/variant.done",
         run=wildcards.run,
-        variant=variants
-    )
+        variant=get_variants(wildcards),
+        )
+
+rule all:
+    input:
+        []
 
 rule write_variant_list:
     input:
-        manifest = f"{MANIFEST_DIR}/{{run}}.json"
+        manifest = f"{ROSETTA_MANIFEST_DIR}/{{run}}.tsv"
     output:
         variants = f"{LOGGING_QC_DIR}/{{run}}/variant_list.tsv"
     log:
         f"{LOGGING_QC_DIR}/{{run}}/write_variant_list.log"
     run:
         Path(output.variants).parent.mkdir(parents=True, exist_ok=True)
-        with open(input.manifest) as handle:
-            data = json.load(handle)
         with open(output.variants, "w") as out:
             out.write("variant_hash\tfull_length_pdb\n")
-            for v in data["variants"]:
-                out.write(
-                    f"{v.get('variant_hash', '')}\t"
-                    f"{v.get('full_length_pdb', '')}\n"
-                )
+            with open(input.manifest) as handle:
+                for line in handle:
+                    pdb_name = line.strip()
+                    if not pdb_name:
+                        continue
+                    variant_hash = Path(pdb_name).stem
+                    full_path = full_length_pdb_path(wildcards.run, pdb_name)
+                    out.write(f"{variant_hash}\t{full_path}\n")
         with open(log[0], "w") as l:
             l.write(f"wrote variant list: {output.variants}\n")
 
-#extract chain A and remove HA2
 rule extract_chain_a_remove_ha2:
     input:
-        pdb = variant_full_length_pdb
+        pdb = variant_full_length_pdb,
+        metadata = metadata_file
     output:
-        ha1 = f"{WORK_DIR}/{{run}}/{{variant}}/ha1/chainA_HA1.pdb"
+        ha1 = f"{ROSETTA_READY_DIR}/{{run}}/{{variant}}.pdb"
     log:
         f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.extract_chainA_HA1.log"
     shell:
         """
-        mkdir -p {WORK_DIR}/{wildcards.run}/{wildcards.variant}/ha1
+        mkdir -p {ROSETTA_READY_DIR}/{wildcards.run}
         mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
-
         {{
           echo "extract chain A and remove HA2 starting"
           date
@@ -264,12 +237,15 @@ rule extract_chain_a_remove_ha2:
           echo "run={wildcards.run}"
           echo "variant={wildcards.variant}"
           echo "input_pdb={input.pdb}"
+          echo "metadata={input.metadata}"
           echo "output_ha1={output.ha1}"
-          echo "pwd=$(pwd)"
-        }} >> {log} 2>&1
+        }} > {log} 2>&1
 
-        python scripts/extract_chain_a_remove_ha2.py \
+        python scripts/trim_HA1.py \
           --input {input.pdb} \
+          --metadata_path {input.metadata} \
+          --variant {wildcards.variant} \
+          --run {wildcards.run} \
           --output {output.ha1} \
           >> {log} 2>&1
 
@@ -278,165 +254,90 @@ rule extract_chain_a_remove_ha2:
           date
         }} >> {log} 2>&1
         """
-# pLDDT and per resi energy reports
+
 rule extract_per_residue_plddt:
     input:
-        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/ha1/chainA_HA1.pdb"
+        pdb = f"{ROSETTA_READY_DIR}/{{run}}/{{variant}}.pdb"
     output:
-        report = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.plddt.tsv"
+        report = f"{FINAL_DIR}/{{run}}/{{variant}}/plddt.parquet"
     log:
         f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.plddt.log"
     shell:
         """
+        mkdir -p {FINAL_DIR}/{wildcards.run}/{wildcards.variant}
         mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+
         {{
-          echo "extract per-residue pLDDT starting"
+          echo "extract per-residue pLDDT from unrelaxed HA1 starting"
           date
           hostname
-          echo "run={wildcards.run}"
-          echo "variant={wildcards.variant}"
           echo "pdb={input.pdb}"
-        }} >> {log} 2>&1
-        python scripts/extract_per_residue_plddt.py \
+          echo "variant={wildcards.variant}"
+        }} > {log} 2>&1
+
+        python scripts/lddt.py \
           --pdb {input.pdb} \
           --out {output.report} \
+          --variant {wildcards.variant} \
+          --run {wildcards.run} \
           >> {log} 2>&1
+
         {{
           echo "extract per-residue pLDDT complete"
           date
         }} >> {log} 2>&1
         """
 
-# define rosetta scripts, located in: /scicomp/groups/ID-VSDB/GAT/rosetta.binary.linux.release-371/main/source
-rule rosetta_all_scripts:
+rule rosetta_score:
     input:
-        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/ha1/chainA_HA1.pdb"
+        pdb = f"{ROSETTA_READY_DIR}/{{run}}/{{variant}}.pdb"
     output:
-        done = f"{WORK_DIR}/{{run}}/{{variant}}/scores/rosetta_scripts.done",
-        score_static = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.rosetta_scripts_static.sc",
-        score_thread = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.rosetta_scripts_thread.sc",
-        score_jd3_static = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.rosetta_scripts_jd3_static.sc",
-        score_jd3_thread = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.rosetta_scripts_jd3_thread.sc"
+        done = f"{WORK_DIR}/{{run}}/{{variant}}/scores/rosetta_score.done",
+        score_static = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.score_static.sc",
+        score_jd2 = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.score_jd2.sc"
     log:
-        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.all_rosetta_scripts.log"
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.rosetta_score.log"
     shell:
         """
         mkdir -p {WORK_DIR}/{wildcards.run}/{wildcards.variant}/scores
         mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+
         {{
-          echo "rosetta scripts starting"
+          echo "rosetta score raw HA1 starting"
           date
           hostname
-          echo "run={wildcards.run}"
-          echo "variant={wildcards.variant}"
           echo "pdb={input.pdb}"
-          echo "rosetta_bin={ROSETTA_BIN}"
-        }} >> {log} 2>&1
-        echo "running rosetta_scripts.static.linuxgccrelease" >> {log}
-        {ROSETTA_SCRIPTS} \
+          echo "score_binary={ROSETTA_SCORE}"
+          echo "score_jd2_binary={ROSETTA_SCORE_JD2}"
+        }} > {log} 2>&1
+
+        {ROSETTA_SCORE} \
           -s {input.pdb} \
+          -in:ignore_unrecognized_res \
+          -overwrite \
           -out:file:scorefile {output.score_static} \
-          >> {log} 2>&1 || true
-        echo "running rosetta_scripts.cxx11thread.linuxgccrelease" >> {log}
-        {ROSETTA_SCRIPTS_THREAD} \
+          >> {log} 2>&1
+
+        {ROSETTA_SCORE_JD2} \
           -s {input.pdb} \
-          -out:file:scorefile {output.score_thread} \
-          >> {log} 2>&1 || true
-        echo "running rosetta_scripts_jd3.static.linuxgccrelease" >> {log}
-        {ROSETTA_SCRIPTS_JD3} \
-          -s {input.pdb} \
-          -out:file:scorefile {output.score_jd3_static} \
-          >> {log} 2>&1 || true
-        echo "running rosetta_scripts_jd3.cxx11thread.linuxgccrelease" >> {log}
-        {ROSETTA_SCRIPTS_JD3_THREAD} \
-          -s {input.pdb} \
-          -out:file:scorefile {output.score_jd3_thread} \
-          >> {log} 2>&1 || true
-        {{
-          echo "rosetta scripts complete"
-          date
-        }} >> {log} 2>&1
+          -in:ignore_unrecognized_res \
+          -overwrite \
+          -out:file:scorefile {output.score_jd2} \
+          >> {log} 2>&1
+
         touch {output.done}
-        """
-#extract per resi energy
-rule extract_rosetta_per_residue_energy:
-    input:
-        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/ha1/chainA_HA1.pdb",
-        scoring_done = f"{WORK_DIR}/{{run}}/{{variant}}/scores/rosetta_scripts.done"
-    output:
-        report = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.rosetta_per_residue_energy.tsv"
-    log:
-        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.rosetta_per_residue_energy.log"
-    shell:
-        """
-        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
 
         {{
-          echo "extract rosetta per-residue energy starting"
-          date
-          hostname
-          echo "run={wildcards.run}"
-          echo "variant={wildcards.variant}"
-          echo "pdb={input.pdb}"
-        }} >> {log} 2>&1
-
-        python scripts/extract_rosetta_per_residue.py \
-          --pdb {input.pdb} \
-          --out {output.report} \
-          --allow-nulls \
-          >> {log} 2>&1
-
-        {{
-          echo "extract rosetta per-residue energy complete"
+          echo "rosetta score raw HA1 complete"
           date
         }} >> {log} 2>&1
         """
 
-# compare to reference
-rule compare_to_reference:
-    input:
-        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/ha1/chainA_HA1.pdb",
-        metadata = f"{MANIFEST_DIR}/{{run}}.txt"
-    output:
-        metrics = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.reference_compare.tsv"
-    params:
-        reference = reference_for_run
-    log:
-        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.reference_compare.log"
-    shell:
-        """
-        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
-        {{
-          echo "reference comparison starting"
-          date
-          hostname
-          echo "run={wildcards.run}"
-          echo "variant={wildcards.variant}"
-          echo "pdb={input.pdb}"
-          echo "metadata={input.metadata}"
-          echo "reference={params.reference}"
-          echo "atoms=CA"
-        }} >> {log} 2>&1
-        python scripts/calc_rmsd_maxsub.py \
-          --mobile {input.pdb} \
-          --reference {params.reference} \
-          --atoms CA \
-          --out {output.metrics} \
-          --allow-nulls \
-          >> {log} 2>&1
-        {{
-          echo "reference comparison complete"
-          date
-        }} >> {log} 2>&1
-        """
-
-# run rosetta relax
 rule rosetta_relax:
     input:
-        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/ha1/chainA_HA1.pdb"
+        pdb = f"{ROSETTA_READY_DIR}/{{run}}/{{variant}}.pdb"
     output:
-        relaxed = f"{WORK_DIR}/{{run}}/{{variant}}/relax/relaxed.pdb",
-        metrics = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.relax_metrics.tsv"
+        relaxed = f"{WORK_DIR}/{{run}}/{{variant}}/relax/relaxed.pdb"
     log:
         f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.relax.log"
     shell:
@@ -448,155 +349,372 @@ rule rosetta_relax:
           echo "rosetta relax starting"
           date
           hostname
-          echo "run={wildcards.run}"
-          echo "variant={wildcards.variant}"
           echo "pdb={input.pdb}"
           echo "binary={ROSETTA_RELAX}"
-        }} >> {log} 2>&1
+        }} > {log} 2>&1
 
         {ROSETTA_RELAX} \
-          -s {input.pdb} \
+          -quick \
+          -ex1 \
+          -ex2 \
+          -overwrite \
+          -relax:fast \
+          -in:file:s {input.pdb} \
+          -out:pdb \
+          -out:prefix relaxed_ \
           -out:path:pdb {WORK_DIR}/{wildcards.run}/{wildcards.variant}/relax \
           >> {log} 2>&1
 
-        relaxed_file=$(ls {WORK_DIR}/{wildcards.run}/{wildcards.variant}/relax/*relaxed*.pdb 2>/dev/null | head -n 1)
+        relaxed_file=$(ls {WORK_DIR}/{wildcards.run}/{wildcards.variant}/relax/*.pdb 2>/dev/null | head -n 1)
 
         if [ -z "$relaxed_file" ]; then
-          relaxed_file=$(ls {WORK_DIR}/{wildcards.run}/{wildcards.variant}/relax/*.pdb 2>/dev/null | head -n 1)
-        fi
-
-        if [ -z "$relaxed_file" ]; then
-          echo "ERROR: relax produced no pdb" >> {log}
+          echo "ERROR: Rosetta relax produced no PDB" >> {log}
           exit 1
         fi
 
         cp "$relaxed_file" {output.relaxed}
-
-        python scripts/rosetta_qualitative_metrics.py \
-          --pdb {output.relaxed} \
-          --out {output.metrics} \
-          --allow-nulls \
-          >> {log} 2>&1
 
         {{
           echo "rosetta relax complete"
           date
         }} >> {log} 2>&1
         """
-
-# rosetta relax pocket, necessary for sialic acid docks mainly
-rule pocket_relax:
+rule rosetta_score_relaxed:
     input:
         pdb = f"{WORK_DIR}/{{run}}/{{variant}}/relax/relaxed.pdb"
     output:
-        pocket_relaxed = f"{WORK_DIR}/{{run}}/{{variant}}/pocket_relax/pocket_relaxed.pdb",
-        metrics = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.pocket_relax_metrics.tsv"
+        score = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.relaxed_score.sc"
     log:
-        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.pocket_relax.log"
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.relaxed_score.log"
     shell:
         """
-        mkdir -p {WORK_DIR}/{wildcards.run}/{wildcards.variant}/pocket_relax
         mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
 
         {{
-          echo "pocket relax starting"
+          echo "rosetta score relaxed HA1 starting"
+          date
+          hostname
+          echo "pdb={input.pdb}"
+          echo "binary={ROSETTA_SCORE}"
+        }} > {log} 2>&1
+
+        {ROSETTA_SCORE} \
+          -s {input.pdb} \
+          -in:ignore_unrecognized_res \
+          -overwrite \
+          -out:file:scorefile {output.score} \
+          >> {log} 2>&1
+
+        {{
+          echo "rosetta score relaxed HA1 complete"
+          date
+        }} >> {log} 2>&1
+        """
+rule select_best_energy_ha1:
+    input:
+        original = f"{ROSETTA_READY_DIR}/{{run}}/{{variant}}.pdb",
+        relaxed = f"{WORK_DIR}/{{run}}/{{variant}}/relax/relaxed.pdb",
+        original_score = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.score_static.sc",
+        relaxed_score = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.relaxed_score.sc"
+    output:
+        best = f"{WORK_DIR}/{{run}}/{{variant}}/best_energy/{{variant}}_best_energy_ha1.pdb",
+        decision = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}_best_energy_ha1.tsv"
+    log:
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.best_energy_ha1.log"
+    shell:
+        """
+        mkdir -p {WORK_DIR}/{wildcards.run}/{wildcards.variant}/best_energy
+        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+
+        python scripts/best_HA.py \
+          --original {input.original} \
+          --relaxed {input.relaxed} \
+          --original-score {input.original_score} \
+          --relaxed-score {input.relaxed_score} \
+          --selected {output.best} \
+          --out {output.decision} \
+          --log results/{wildcards.run}.{wildcards.variant}.best_HA.log \
+          > {log} 2>&1
+        """
+
+rule compare_to_reference:
+    input:
+        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/best_energy/{{variant}}_best_energy_ha1.pdb",
+        refs = all_reference_pdbs
+    output:
+        summary = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.reference_compare.tsv"
+    log:
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.reference_compare.log"
+    shell:
+        """
+        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+
+        tmpdir={LOGGING_QC_DIR}/{wildcards.run}/{wildcards.variant}.reference_compare
+        mkdir -p "$tmpdir"
+
+        {{
+          echo "reference comparison with Rosetta score_jd2 against all refs starting"
+          date
+          hostname
+          echo "pdb={input.pdb}"
+          echo "refs={input.refs}"
+          echo "binary={ROSETTA_SCORE_JD2}"
+        }} > {log} 2>&1
+
+        echo -e "reference\\tscorefile" > {output.summary}
+
+        for ref in {input.refs}; do
+          ref_name=$(basename "$ref" .pdb)
+          scorefile="$tmpdir/${{ref_name}}.score_jd2.sc"
+
+          echo "comparing_to=$ref" >> {log}
+          echo "scorefile=$scorefile" >> {log}
+
+          {ROSETTA_SCORE_JD2} \
+            -s {input.pdb} \
+            -native "$ref" \
+            -in:ignore_unrecognized_res \
+            -overwrite \
+            -out:file:scorefile "$scorefile" \
+            >> {log} 2>&1
+
+          echo -e "${{ref_name}}\\t${{scorefile}}" >> {output.summary}
+        done
+
+        {{
+          echo "reference comparison complete"
+          date
+        }} >> {log} 2>&1
+        """
+rule residue_energy_breakdown:
+    input:
+        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/best_energy/{{variant}}_best_energy_ha1.pdb"
+    output:
+        raw = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.res_breakdown.txt",
+        per_res = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.per_res_scorefile.tsv",
+        parquet = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.per_res_scorefile.parquet"
+    log:
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.residue_energy_breakdown.log"
+    shell:
+        """
+        mkdir -p {TABLE_DIR}/{wildcards.run}/{wildcards.variant}
+        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+
+        {{
+          echo "residue energy breakdown starting"
+          date
+          hostname
+          echo "pdb={input.pdb}"
+          echo "binary={ROSETTA_RESIDUE_ENERGY}"
+        }} > {log} 2>&1
+
+        {ROSETTA_RESIDUE_ENERGY} \
+          -in:file:s {input.pdb} \
+          -out:file:silent {output.raw} \
+          >> {log} 2>&1
+
+        sed -i "s/SCORE:  //g" {output.raw}
+        sed -i "s/relaxed_quick_//g" {output.raw}
+        sed -i "s/relaxed_//g" {output.raw}
+        sed -i "s/_0001//g" {output.raw}
+
+        python scripts/dataframe_per_res.py \
+          -i {output.raw} \
+          -v {wildcards.variant} \
+          -t {wildcards.run} \
+          -o {output.per_res} \
+          >> {log} 2>&1
+
+        python scripts/tsv_to_parquet.py {output.per_res} >> {log} 2>&1
+        """
+
+rule glycan_distance_tables:
+    input:
+        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/best_energy/{{variant}}_best_energy_ha1.pdb"
+    output:
+        csv = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.ASA_glyc.csv",
+        parquet = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.ASA_glyc.parquet"
+    log:
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.glycan_distance.log"
+    shell:
+        """
+        mkdir -p {TABLE_DIR}/{wildcards.run}/{wildcards.variant}
+        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+
+        {{
+          echo "glycan distance calculator starting"
+          date
+          hostname
+          echo "pdb={input.pdb}"
+        }} > {log} 2>&1
+
+        python scripts/glyc.py \
+          -i {input.pdb} \
+          -v {wildcards.variant} \
+          -t {wildcards.run} \
+          -o {output.csv} \
+          >> {log} 2>&1
+
+        sed -i "s/relaxed_quick_//g" {output.csv}
+        sed -i "s/relaxed_//g" {output.csv}
+        sed -i "s/_0001//g" {output.csv}
+
+        python scripts/tsv_to_parquet.py {output.csv} >> {log} 2>&1
+        """
+
+rule structural_distance_tables:
+    input:
+        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/best_energy/{{variant}}_best_energy_ha1.pdb"
+    output:
+        heavy = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}_heavy.txt",
+        calpha = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}_calpha.txt",
+        carbon = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}_carbon.txt"
+    log:
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.structural_distance.log"
+    shell:
+        """
+        mkdir -p {TABLE_DIR}/{wildcards.run}/{wildcards.variant}
+        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+
+        {{
+          echo "structural distance tables starting"
+          date
+          hostname
+          echo "pdb={input.pdb}"
+        }} > {log} 2>&1
+
+        python scripts/structural_distance.py \
+          -i {input.pdb} \
+          -o {output.heavy} \
+          -c heavy \
+          -r True \
+          >> {log} 2>&1
+
+        python scripts/structural_distance.py \
+          -i {input.pdb} \
+          -o {output.calpha} \
+          -c calpha \
+          -r True \
+          >> {log} 2>&1
+
+        python scripts/structural_distance.py \
+          -i {input.pdb} \
+          -o {output.carbon} \
+          -c carbon \
+          -r True \
+          >> {log} 2>&1
+        """
+
+rule get_contacts:
+    input:
+        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/best_energy/{{variant}}_best_energy_ha1.pdb"
+    output:
+        raw = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.static_contacts.csv",
+        clean = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.getcontacts.csv",
+        parquet = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.getcontacts.parquet"
+    log:
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.getcontacts.log"
+    shell:
+        """
+        mkdir -p {TABLE_DIR}/{wildcards.run}/{wildcards.variant}
+        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+
+        {{
+          echo "getcontacts starting"
+          date
+          hostname
+          echo "pdb={input.pdb}"
+        }} > {log} 2>&1
+
+        python scripts/get_static_contacts.py \
+          --structure {input.pdb} \
+          --output {output.raw} \
+          --itypes all \
+          >> {log} 2>&1
+
+        sed -i '1d' {output.raw}
+        sed -i '1d' {output.raw}
+        sed -i 's/:/\\t/g' {output.raw}
+
+        python scripts/getcontacts_df.py \
+          -i {output.raw} \
+          -v {wildcards.variant} \
+          -t {wildcards.run} \
+          -o {output.clean} \
+          >> {log} 2>&1
+
+        sed -i "s/relaxed_quick_//g" {output.clean}
+        sed -i "s/relaxed_//g" {output.clean}
+        sed -i "s/_0001//g" {output.clean}
+
+        python scripts/tsv_to_parquet.py {output.clean} >> {log} 2>&1
+        """
+
+rule epitope_exposure:
+    input:
+        pdb = f"{WORK_DIR}/{{run}}/{{variant}}/best_energy/{{variant}}_best_energy_ha1.pdb"
+    output:
+        tsv = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}_epitope.tsv",
+        parquet = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}_epitope.parquet"
+    log:
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.epitope_exposure.log"
+    shell:
+        """
+        mkdir -p {TABLE_DIR}/{wildcards.run}/{wildcards.variant}
+        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+        {{
+          echo "epitope exposure diff starting"
+          date
+          hostname
+          echo "pdb={input.pdb}"
+        }} > {log} 2>&1
+        python scripts/epitope_exposure_diff.py \
+          -i {input.pdb} \
+          -v {wildcards.variant} \
+          -o {output.tsv} \
+          >> {log} 2>&1
+        sed -i "s/relaxed_quick_//g" {output.tsv}
+        sed -i "s/relaxed_//g" {output.tsv}
+        sed -i "s/_0001//g" {output.tsv}
+        python scripts/tsv_to_parquet.py {output.tsv} >> {log} 2>&1
+        """
+rule variant_complete:
+    input:
+        best = f"{WORK_DIR}/{{run}}/{{variant}}/best_energy/{{variant}}_best_energy_ha1.pdb",
+        plddt = f"{FINAL_DIR}/{{run}}/{{variant}}/plddt.parquet",
+        reference_compare = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.reference_compare.tsv",
+        per_res = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.per_res_scorefile.parquet",
+        glycan = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.ASA_glyc.parquet",
+        heavy = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}_heavy.txt",
+        calpha = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}_calpha.txt",
+        carbon = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}_carbon.txt",
+        contacts = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}.getcontacts.parquet",
+        epitope = f"{TABLE_DIR}/{{run}}/{{variant}}/{{variant}}_epitope.parquet"
+    output:
+        done = f"{FINAL_DIR}/{{run}}/{{variant}}/variant.done"
+    log:
+        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.variant_complete.log"
+    shell:
+        """
+        mkdir -p {FINAL_DIR}/{wildcards.run}/{wildcards.variant}
+        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
+        {{
+          echo "variant complete"
           date
           hostname
           echo "run={wildcards.run}"
           echo "variant={wildcards.variant}"
-          echo "pdb={input.pdb}"
-          echo "binary={ROSETTA_POCKET_RELAX}"
-        }} >> {log} 2>&1
+          echo "best_model={input.best}"
+          echo "plddt={input.plddt}"
+          echo "reference_compare={input.reference_compare}"
+        }} > {log} 2>&1
 
-        {ROSETTA_POCKET_RELAX} \
-          -s {input.pdb} \
-          -out:path:pdb {WORK_DIR}/{wildcards.run}/{wildcards.variant}/pocket_relax \
-          >> {log} 2>&1
-
-        pocket_file=$(ls {WORK_DIR}/{wildcards.run}/{wildcards.variant}/pocket_relax/*.pdb 2>/dev/null | head -n 1)
-
-        if [ -z "$pocket_file" ]; then
-          echo "ERROR: pocket_relax produced no pdb" >> {log}
-          exit 1
-        fi
-
-        cp "$pocket_file" {output.pocket_relaxed}
-
-        python scripts/rosetta_qualitative_metrics.py \
-          --pdb {output.pocket_relaxed} \
-          --out {output.metrics} \
-          --allow-nulls \
-          >> {log} 2>&1
-
-        {{
-          echo "pocket relax complete"
-          date
-        }} >> {log} 2>&1
+        touch {output.done}
         """
 
-
-# QC best model for metrics
-rule select_best_model:
-    input:
-        original = f"{WORK_DIR}/{{run}}/{{variant}}/ha1/chainA_HA1.pdb",
-        relaxed = f"{WORK_DIR}/{{run}}/{{variant}}/relax/relaxed.pdb",
-        pocket = f"{WORK_DIR}/{{run}}/{{variant}}/pocket_relax/pocket_relaxed.pdb",
-        score_done = f"{WORK_DIR}/{{run}}/{{variant}}/scores/rosetta_scripts.done",
-        plddt = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.plddt.tsv",
-        energy = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.rosetta_per_residue_energy.tsv",
-        rmsd = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.reference_compare.tsv",
-        relax_metrics = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.relax_metrics.tsv",
-        pocket_metrics = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.pocket_relax_metrics.tsv"
-    output:
-        selected = f"{FINAL_DIR}/{{run}}/{{variant}}/selected.pdb",
-        decision = f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.selection.tsv"
-    log:
-        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.selection.log"
-    shell:
-        """
-        mkdir -p {FINAL_DIR}/{wildcards.run}/{wildcards.variant}
-        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
-
-        python scripts/select_best_model.py \
-          --original {input.original} \
-          --relaxed {input.relaxed} \
-          --pocket {input.pocket} \
-          --plddt {input.plddt} \
-          --energy {input.energy} \
-          --rmsd {input.rmsd} \
-          --relax-metrics {input.relax_metrics} \
-          --pocket-metrics {input.pocket_metrics} \
-          --selected {output.selected} \
-          --decision {output.decision} \
-          --allow-nulls \
-          > {log} 2>&1
-        """
-
-
-#run the qualitative and quantitative metrics
-rule final_structural_metrics:
-    input:
-        pdb = f"{FINAL_DIR}/{{run}}/{{variant}}/selected.pdb"
-    output:
-        metrics = f"{FINAL_DIR}/{{run}}/{{variant}}/final_metrics.json"
-    log:
-        f"{LOGGING_QC_DIR}/{{run}}/{{variant}}.final_metrics.log"
-    shell:
-        """
-        mkdir -p {FINAL_DIR}/{wildcards.run}/{wildcards.variant}
-        mkdir -p {LOGGING_QC_DIR}/{wildcards.run}
-
-        python scripts/run_glyc_epitope_structural_metrics.py \
-          --pdb {input.pdb} \
-          --out {output.metrics} \
-          --allow-nulls \
-          > {log} 2>&1
-        """
-
-# logging
 rule thursday_complete:
     input:
-        final_reports = all_final_reports,
+        variant_done = all_variant_done_files,
         variant_list = f"{LOGGING_QC_DIR}/{{run}}/variant_list.tsv"
     output:
         done = f"{FINAL_DIR}/{{run}}/thursday.done"
