@@ -86,33 +86,8 @@ For each variant, amino acid sequences are retrieved from CDP, converted to fast
     ├── plddt.py
     └── trim_HA1.py
 ```
-Logic for logging:
-protein_modeling.logging_qc.compute_status
-tracks scientific execution outcomes 
-(compute_status: 
-MSA_PENDING, 
-MSA_SUCCESS, 
-MSA_FAILED,
-INFERENCE_PENDING, 
-INFERENCE_SUCCESS, 
-INFERENCE_FAILED,
-ROSETTA_SUCCESS,
-ROSETTA_FAIL,
-QC_SUCCESS,
-QC_FAIL,
-GLYC_DIST-PASSED,
-GETCONTACTS-PASSED,
-FITSCAPE-PASSED,
-EPITOPE-PASSED,
-DOCKINGS-PASSED
-)
 
-protein_modeling.logging_qc.publication_status 
-tracks data delivery of the MSA, QC, Rosetta, Glycosylation Distance, Fitscape, and Dockings (in prog)
-(publication_status:  
-PASS,
-FAIL
-)
+`protein_modeling.logging_qc.publication_status` table in CDP tracks data delivery of the MSA, QC, Rosetta, Glycosylation Distance, Fitscape, and Dockings (in prog) as a binary PASS/FAIL.
 
 Pass/Fail defined as: 
  - MSA- if exists ```/results/<date>_<uuid>/openfold3/msas/<variant_hash>/msa.done```
