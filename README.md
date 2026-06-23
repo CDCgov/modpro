@@ -8,6 +8,8 @@ Structural bioinformatics pipeline orchestrated by a weekly (Mondays) NiFi cron 
 
 For each variant, amino acid sequences are retrieved from CDP, converted to fasta files, submitted for MSA generation, OpenFold3 structure prediction, and phenotypic analyses [glycosylation distance calculation, RBS epitopes, structural distance calculations etc] all the while capturing QC metrics such as full-length pLDDT, logging execution and CDP publication status. Full-length structures are archived, followed by HA1-focused processing that includes chain- and domain- trimming, Rosetta scoring, RMS/MaxSub evaluation, biophysical relaxation, with decision points enforcing QC thresholds and selecting improved structures based on logged improvement of energy score and RMSD. All intermediate and final metrics recorded in protein_modeling “logging” and “qc” tables. NiFi handles observability and quality control by ingesting checkpointed outputs from Snakemake, publishing validated files to HDFS, and writing SQL metadata and run results. The pipeline distinguishes clearly between compute and publication states, enabling robust retry, auditability, and reliable end-to-end processing.
 
+
+```
 .
 ├── LICENSE
 ├── README.md
@@ -83,7 +85,7 @@ For each variant, amino acid sequences are retrieved from CDP, converted to fast
     ├── glyc.py
     ├── plddt.py
     └── trim_HA1.py
-
+```
 Logic for logging:
 protein_modeling.logging_qc.compute_status
 tracks scientific execution outcomes 
@@ -115,16 +117,16 @@ FAIL
 Pass/Fail defined as: 
 MSA- if exists ```/results/<date>_<uuid>/openfold3/msas/<variant_hash>/msa.done```
        else FAIL
-Structure complete - if exists ```/results/<date>_<uuid>/openfold3/prediction/<variant_hash>/structure.done``` 
-QC - ```/results/<date>_<uuid>/rosetta_ready_dir/<variant>.pdb```
+Structure complete - if exists   `/results/<date>_<uuid>/openfold3/prediction/<variant_hash>/structure.done`
+QC - `/results/<date>_<uuid>/rosetta_ready_dir/<variant>.pdb`
        else FAIL
 Rosetta- /results/<date>_<uuid>
-       else ```tail <date>_<uuid>/<variant_hash>.relax.log```
-Glycosylation Distance if exists ```/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/glycosylation_distance/<variant_hash>.txt``` 
+       else `tail <date>_<uuid>/<variant_hash>.relax.log`
+Glycosylation Distance if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/glycosylation_distance/<variant_hash>.txt` 
        else FAIL
-Fitscape if exists ```/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/fitscape/<variant_hash>.txt``` 
+Fitscape if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/fitscape/<variant_hash>.txt`
        else FAIL
-Dockings (in prog) if exists ```/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/epitope_calculation/<variant_hash>.txt``` 
+Dockings (in prog) if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/epitope_calculation/<variant_hash>.txt`
        else FAIL
 
 
