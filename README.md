@@ -115,18 +115,19 @@ FAIL
 )
 
 Pass/Fail defined as: 
-MSA- if exists ```/results/<date>_<uuid>/openfold3/msas/<variant_hash>/msa.done```
+ - MSA- if exists ```/results/<date>_<uuid>/openfold3/msas/<variant_hash>/msa.done```
        else FAIL
-Structure complete - if exists   `/results/<date>_<uuid>/openfold3/prediction/<variant_hash>/structure.done`
-QC - `/results/<date>_<uuid>/rosetta_ready_dir/<variant>.pdb`
+ - Structure complete - if exists   `/results/<date>_<uuid>/openfold3/prediction/<variant_hash>/structure.done`
+        else FAIL
+ - QC - `/results/<date>_<uuid>/rosetta_ready_dir/<variant>.pdb`
        else FAIL
-Rosetta- /results/<date>_<uuid>
+ - Rosetta- /results/<date>_<uuid>
        else `tail <date>_<uuid>/<variant_hash>.relax.log`
-Glycosylation Distance if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/glycosylation_distance/<variant_hash>.txt` 
+ - Glycosylation Distance if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/glycosylation_distance/<variant_hash>.txt` 
        else FAIL
-Fitscape if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/fitscape/<variant_hash>.txt`
+ - Fitscape if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/fitscape/<variant_hash>.txt`
        else FAIL
-Dockings (in prog) if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/epitope_calculation/<variant_hash>.txt`
+- Dockings (in prog) if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/epitope_calculation/<variant_hash>.txt`
        else FAIL
 
 
