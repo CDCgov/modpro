@@ -24,9 +24,8 @@ For each variant, amino acid sequences are retrieved from CDP, converted to fast
 │   ├── jsons
 │   ├── fastas
 │   ├── msas
-│   │   └── prediction
-│   │       └── <variant_hash>
-│   │           └── msa.done
+│   │   └── <variant_hash>
+│   │       └── msa.done
 │   ├── check_gpu.sh
 │   ├── checkpoints
 │   ├── openfold-3
@@ -67,7 +66,6 @@ For each variant, amino acid sequences are retrieved from CDP, converted to fast
 |   |           |   └── <variant_hash>.txt
 |   |           └── epitope_calculation
 |   |               └── <variant_hash>.txt
-│   │    
 │   └── logging_qc
 │        └── <date>_<uuid>
 │             ├── <variant_hash>.relax.log
