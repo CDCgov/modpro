@@ -167,8 +167,11 @@ Benchmarks for RBS prediction tool:
 
 ## Sialic Acid Binding Site Analysis: 
 Optimized Boltzmann scoring, benchmarks
+
 Database Schema Optimization: Remove deprecated tables and implement new analytical structures and optimize join strategies 
+
 HA1 Domain Focus: Transition from full HA to HA1-specific modeling
+
 Targeted Tables for Removal:
 unrelaxed_pdb_data - Contains unprocessed structural data
 <convert to HA1 only, pLDDT average for whole and HA1>
