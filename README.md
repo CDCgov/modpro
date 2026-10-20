@@ -119,9 +119,9 @@ DAGs for the Monday/Thursday Snakemake pipelines:
     ├── glyc.py
     ├── plddt.py
     └── trim_HA1.py
-
-staging directory: `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` 
 ```
+staging directory: `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` 
+
 
 `protein_modeling.logging_qc.publication_status` table in CDP tracks data delivery of the MSA, QC, Rosetta, Glycosylation Distance, Fitscape, and Dockings (in prog) as a binary PASS/FAIL.
 
