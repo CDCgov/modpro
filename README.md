@@ -185,7 +185,7 @@ flowchart TB
     end
 
     %% =====================================================
-    %% MODELING PLANE
+    %% MODELING
     %% =====================================================
     subgraph B["Snakemake Workflow Part1"]
         direction LR
@@ -226,7 +226,7 @@ flowchart TB
     end
 
     %% =====================================================
-    %% ANALYTICS PLANE
+    %% ANALYTICS
     %% =====================================================
     subgraph C["Snakemake Workflow Part 2"]
         direction LR
@@ -291,22 +291,7 @@ https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=416d35ee-136d-164d
 
 DAGs for the Monday/Thursday Snakemake pipelines:
 
-<svg width="800" height="1000" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-      <path d="M2 1L8 5L2 9" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </marker>
-  </defs>
-  
-  <!-- Title -->
-
-  <!-- Execution flow indicator -->
-  <path d="M720 130 L720 400" stroke="#ccc" stroke-width="2" stroke-dasharray="4,4" fill="none"/>
-  <text x="725" y="150" font-family="Arial, sans-serif" font-size="12" fill="#666" writing-mode="tb"></text>
-</svg>
-<img width="800" height="1000" alt="snakemake_dag_svg (1)" src="https://github.com/user-attachments/assets/7c7ea9b2-1c44-41b7-a5f7-eed8f960fd20" />
-
-<img width="900" height="1200" alt="rosetta_ha1_pipeline_dag (1)" src="https://github.com/user-attachments/assets/af61d4ab-d675-4587-918b-5b0e8a3a2f69" />
+[Thursday pipeline](https://github.com/CDCgov/modpro/blob/main/thursday.pdf)
 
 URL for Nifi pipelines:
 https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=416d35ee-136d-164d-8b00-8c9645776218&componentIds=
