@@ -303,26 +303,17 @@ kill:
 Ctrl-c
 ```
 
-The Monday/OpenFold3 pipeline is triggered when Nifi generates a manifest ending in .csv: [Nifi Monday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/881e3d30-341b-1bdc-a753-bbe492b171d4) pulls variant hashes from REFSYS and generates manifest, posted to `/scicomp/groups/modpro/manifests` triggering openfold3 job managed by snakemake.
+Monday/OpenFold3 pipeline is triggered when Nifi generates a manifest ending in .csv: [Nifi Monday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/881e3d30-341b-1bdc-a753-bbe492b171d4) pulls variant hashes from REFSYS and generates manifest, posted to `/scicomp/groups/modpro/manifests` triggering openfold3 job managed by snakemake.
 
-For the Thursday/Rosetta pipeline manifest ending in .tsv generated automatically in: `/scicomp/groups/modpro/manifests/rosetta_runs/`. [Nifi Thursday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/ed5534dd-55d1-1bce-bb46-805f7879ce50) runs characterization and copies parquet file output to the staging area `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` for pickup by the Nifi [protein modeling post pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/416d35ee-136d-164d-8b00-8c9645776218/Processor/d0c93509-42e2-1dd7-a766-d5259d7deeb8)
-
-Pipeline logging and reporting is orchestrated by Nifi, which pulls from the Snakemake-generated JSON logs and posts to HDFS in near real-time. These can be accessed by SQL query of the CDP database: `protein_modeling.modpro.logging.`
-
-Nifi Pipeline that posts to HDFS, including logging, data and reports. 
-https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=416d35ee-136d-164d-8b00-8c9645776218&componentIds=
+Thursday/Rosetta pipeline triggered by Nifi generating a manifest ending in .tsv automatically every Thursday in: `/scicomp/groups/modpro/manifests/rosetta_runs/`. [Nifi Thursday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/ed5534dd-55d1-1bce-bb46-805f7879ce50) runs characterization and copies parquet file output to the staging area `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` for pickup by the Nifi [protein modeling post pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/416d35ee-136d-164d-8b00-8c9645776218/Processor/d0c93509-42e2-1dd7-a766-d5259d7deeb8)
 
 DAGs for the Monday/Thursday Snakemake pipelines:
 
 ## Monday's DAG
 ![Monday pipeline DAG](dag_openfold3_f02725056edb1e308c7da494f103ab52.svg)
 
-
 ## Thursday's DAG
 ![Thursday pipeline DAG](dag_f02725056edb1e308c7da494f103ab52.svg)
-
-URL for Nifi pipelines:
-https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=416d35ee-136d-164d-8b00-8c9645776218&componentIds=
 
 ## Privacy Standard Notice
 
