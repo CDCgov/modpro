@@ -9,10 +9,10 @@ Structural bioinformatics pipeline orchestrated by a weekly (Mondays) NiFi cron 
 
 For each variant, amino acid sequences are retrieved from CDP, converted to fasta files, submitted for MSA generation, OpenFold3 structure prediction, and phenotypic analyses [glycosylation distance calculation, RBS epitopes, structural distance calculations etc] all the while capturing QC metrics such as full-length pLDDT, logging execution and CDP publication status. Full-length structures are archived, followed by HA1-focused processing that includes chain- and domain- trimming, Rosetta scoring, RMS/MaxSub evaluation, biophysical relaxation, with decision points enforcing QC thresholds and selecting improved structures based on logged improvement of energy score and RMSD. All intermediate and final metrics recorded in protein_modeling “logging” and “qc” tables. NiFi handles observability and quality control by ingesting checkpointed outputs from Snakemake, publishing validated files to HDFS, and writing SQL metadata and run results. The pipeline distinguishes clearly between compute and publication states, enabling robust retry, auditability, and reliable end-to-end processing.
 
-```
+---
 The python script `monitor_manifests.py` continuously watches for new Monday and Thursday manifest files and launches Snakemake workflow automatically.
 The monitor polls both directories every 10 seconds.
-```
+---
 
 Usage for monitoring script:
 ```bash
