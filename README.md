@@ -1,12 +1,50 @@
 # MODPRO
 
-MOD-eling PRO-teins Pipeline
+## MOD-eling PRO-teins Pipeline
 
-The MODPRO pipeline was developed by the CDC's Influenza Division to analyze AlphaFold-predicted structures for antigenic drift of influenza hemagglutinin proteins. Viral strain fitness is predicted in terms of antigenic drift using a fitness landscape model (see repo referenced below) relative to a user-selected vaccine reference. It uses open-source programs along with custom CDC code. With minor tweaking, this program is usable by external partners but can also be run on the CDC cluster. The generated datasets offer insights into the evolutionary fitness of viral strains without the need for in-house sequencing or propagation efforts as long as high-quality sequencing is publicly available. The pipeline simplifies and visualizes complex sequence surveillance data, aiding leadership in making informed decisions regarding public health. It can be used to generate new training datasets and perform _ad hoc_ comparisons of biophysical characteristics between individual isolates or reference strains.
+The MODPRO pipeline was developed by the CDC's Influenza Division to analyze AlphaFold-predicted structures for antigenic drift of influenza hemagglutinin proteins. 
+Viral strain fitness is predicted in terms of antigenic drift using a fitness landscape model (see repo referenced below) relative to a user-selected vaccine reference. It uses open-source programs along with custom CDC code. With minor tweaking, this program is usable by external partners but can also be run on the CDC cluster. The generated datasets offer insights into the evolutionary fitness of viral strains without the need for in-house sequencing or propagation efforts as long as high-quality sequencing is publicly available. The pipeline simplifies and visualizes complex sequence surveillance data, aiding leadership in making informed decisions regarding public health. It can be used to generate new training datasets and perform _ad hoc_ comparisons of biophysical characteristics between individual isolates or reference strains.
 
 Structural bioinformatics pipeline orchestrated by a weekly (Mondays) NiFi cron job that queries ref_sys database top_model_priority table to identify high-priority HA variants not yet predicted by Openfold3 but targeted for experimentation by the laboratory. Pipeline then generates a run manifest after checking HDFS for duplicates and logs metadata before publishing manifest to GWA, triggering Snakemake structural prediction pipeline. The planned update includes database cleanup, automated variant processing, enhanced RBS epitope analysis with sialic acid binding prediction feature, and a strategic shift to HA1-focused relaxation and analytics. 
 
 For each variant, amino acid sequences are retrieved from CDP, converted to fasta files, submitted for MSA generation, OpenFold3 structure prediction, and phenotypic analyses [glycosylation distance calculation, RBS epitopes, structural distance calculations etc] all the while capturing QC metrics such as full-length pLDDT, logging execution and CDP publication status. Full-length structures are archived, followed by HA1-focused processing that includes chain- and domain- trimming, Rosetta scoring, RMS/MaxSub evaluation, biophysical relaxation, with decision points enforcing QC thresholds and selecting improved structures based on logged improvement of energy score and RMSD. All intermediate and final metrics recorded in protein_modeling “logging” and “qc” tables. NiFi handles observability and quality control by ingesting checkpointed outputs from Snakemake, publishing validated files to HDFS, and writing SQL metadata and run results. The pipeline distinguishes clearly between compute and publication states, enabling robust retry, auditability, and reliable end-to-end processing.
+
+```
+The python script `monitor_manifests.py` continuously watches for new Monday and Thursday manifest files and launches Snakemake workflow automatically.
+The monitor polls both directories every 10 seconds.
+```
+
+Usage for monitoring script:
+```bash
+tmux new -s modpro-monitor
+cd /scicomp/groups/modpro
+python monitor_manifests.py | tee monitor.log
+```
+detach from session:
+```bash
+Ctrl-b d
+```
+reattach:
+```bash
+tmux attach -t modpro-monitor
+```
+kill:
+```bash
+Ctrl-c
+```
+
+Monday/OpenFold3 pipeline is triggered when Nifi generates a manifest ending in .csv: [Nifi Monday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/881e3d30-341b-1bdc-a753-bbe492b171d4) pulls variant hashes from REFSYS and generates manifest, posted to `/scicomp/groups/modpro/manifests` triggering openfold3 job managed by snakemake.
+
+Thursday/Rosetta pipeline triggered by Nifi generating a manifest ending in .tsv automatically every Thursday in: `/scicomp/groups/modpro/manifests/rosetta_runs/`. [Nifi Thursday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/ed5534dd-55d1-1bce-bb46-805f7879ce50) runs characterization and copies parquet file output to the staging area `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` for pickup by the Nifi [protein modeling post pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/416d35ee-136d-164d-8b00-8c9645776218/Processor/d0c93509-42e2-1dd7-a766-d5259d7deeb8)
+
+DAGs for the Monday/Thursday Snakemake pipelines:
+
+## Monday's DAG
+![Monday pipeline DAG](dag_openfold3_f02725056edb1e308c7da494f103ab52.svg)
+
+## Thursday's DAG
+![Thursday pipeline DAG](dag_f02725056edb1e308c7da494f103ab52.svg)
+
 
 
 ```
@@ -83,6 +121,8 @@ For each variant, amino acid sequences are retrieved from CDP, converted to fast
     ├── glyc.py
     ├── plddt.py
     └── trim_HA1.py
+
+staging directory: `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` 
 ```
 
 `protein_modeling.logging_qc.publication_status` table in CDP tracks data delivery of the MSA, QC, Rosetta, Glycosylation Distance, Fitscape, and Dockings (in prog) as a binary PASS/FAIL.
@@ -104,29 +144,31 @@ Pass/Fail defined as:
        else FAIL
 
 
-Monomer/Trimer dataset of ~10 recent crystal structures for H1, H3, Hvic
+# Monomer/Trimer dataset of ~10 recent crystal structures for H1, H3, Hvic
 Sialic Acid Binding Dataset <~40 known H5 sialic acid binding data, glycan array data>
 Relaxed pocket scores— add in pipeline, comment out until passes QC
 Minimal database for running openfold3 
 
-Weekly Variant Structural Prediction Pipeline Flow
+# Weekly Variant Structural Prediction Pipeline Flow
 Updated Process Flow:
  -	Automated SQL queries against ref_sys database to identify high-priority variants (deduplication checks against existing protein_modeling entries)  
  -	Automated submission to OpenFold3 for structure prediction
  -	HA1 domain extraction, optimization by rosetta relaxation protocols for energy minimization (energy optimization enforcement for relaxed structures)
  -	Comprehensive logging and audit trails, error handling with retry mechanisms
 
-Automated Variant Processing Pipeline: REFSYS ensures that limited laboratory resources (60-100 HI tests and 10-15 HINT tests per week per subtype) are allocated to specimens that will provide the maximum surveillance value.
+# Automated Variant Processing Pipeline
+REFSYS ensures that limited laboratory resources (60-100 HI tests and 10-15 HINT tests per week per subtype) are allocated to specimens that will provide the maximum surveillance value.
 The six-tier classification system is particularly elegant - it balances the need for comprehensive coverage with statistical rigor, ensuring that well-characterized variants receive inferred results while directing precious testing resources toward variants that need additional characterization or represent emerging threats.
 The business case is compelling because it transforms what was likely a time-intensive, subjective process into an automated, statistically-driven system that improves both efficiency and quality while supporting CDC's broader public health mission and international surveillance partnerships. The updated pipeline should pull variants for weekly identification and processing of priority variants from REFSYS by automated SQL pull. 
 
-Enhanced RBS Epitope Analysis: This epitope prediction tool represents integration of structural biology and immunology principles. The 15 Angstrom distance criterion is large enough to capture the full span of conformational epitopes while remaining within the physical reach of antibody binding domains. Inclusion of both surface accessibility and glycosylation analysis filter out sites without antibody accessibility. The centroid-based approach is especially valuable for RBS analysis since this region is the most functionally and immunologically important site for antigenic drift. 
+# Enhanced RBS Epitope Analysis
+This epitope prediction tool represents integration of structural biology and immunology principles. The 15 Angstrom distance criterion is large enough to capture the full span of conformational epitopes while remaining within the physical reach of antibody binding domains. Inclusion of both surface accessibility and glycosylation analysis filter out sites without antibody accessibility. The centroid-based approach is especially valuable for RBS analysis since this region is the most functionally and immunologically important site for antigenic drift. 
 
-Centroid-prediction tool pulls amino acids within 15 Angstroms with surface accessibility and glycosylation interaction. 
+# Centroid-prediction tool pulls amino acids within 15 Angstroms with surface accessibility and glycosylation interaction. 
 Benchmarks for RBS prediction tool: 
 
-Sialic Acid Binding Site Analysis: Optimized Boltzmann scoring, benchmarks
-
+# Sialic Acid Binding Site Analysis: 
+Optimized Boltzmann scoring, benchmarks
 Database Schema Optimization: Remove deprecated tables and implement new analytical structures and optimize join strategies 
 HA1 Domain Focus: Transition from full HA to HA1-specific modeling
 Targeted Tables for Removal:
@@ -135,23 +177,25 @@ unrelaxed_pdb_data - Contains unprocessed structural data
 secondary_structure - Legacy secondary structure annotations
 test - Development/testing artifacts
 
-Update Tables:  
+# Update Tables:  
  - 	calculated_rbs_epitope_residues - Centralized epitope analysis with geometric calculations. Update table from existing measurements to include a list of the predicted residues based on the criteria explained above. 
  - 	pipeline metadata - logging and weekly cron pull of variant runs
  - 	Sialic acid binding predictions [off mode until benchmarks passed]
 
-HA1-Specific Modeling: Transitioning from full HA to HA1-focused analysis represents a strategic shift toward more targeted and efficient modeling because of increased functional relevance: HA1 contains the receptor binding domain and primary antigenic sites; better evolutionary focus as most antigenic drift occurs in the HA1 globular head domain. Full PDB will be stored in the database for ad hoc analysis. Critical receptor binding and neutralization sites are HA1-localized and enhanced accuracy better folding predictions for smaller, more stable domains.
+# HA1-Specific Modeling
+Transitioning from full HA to HA1-focused analysis represents a strategic shift toward more targeted and efficient modeling because of increased functional relevance: HA1 contains the receptor binding domain and primary antigenic sites; better evolutionary focus as most antigenic drift occurs in the HA1 globular head domain. Full PDB will be stored in the database for ad hoc analysis. Critical receptor binding and neutralization sites are HA1-localized and enhanced accuracy better folding predictions for smaller, more stable domains.
 
-Computational Efficiency: Smaller domain size enables higher resolution analysis as well as containing the region with the highest pLDDT values (highest confidence) for more reliable analysis.
+# Computational Efficiency
+Smaller domain size enables higher resolution analysis as well as containing the region with the highest pLDDT values (highest confidence) for more reliable analysis.
 
-This pipeline generates biophysical information on each structure and includes the following, in addition to more granular features :
+# This pipeline generates biophysical information on each structure and includes the following, in addition to more granular features :
 
-  Qualitative Metrics
+#  Qualitative Metrics
 - Rosetta Energy Scores, total and per-residue (a measure of relative stability of protein in question)
 - Root mean square difference - RMS and MaxSub (a scoring of the deviation in alignment between the protein and a reference structure)
 - Relative surface accessibility per residue
 
-  Biophysical Properties Calculators (CDC-generated)
+#  Biophysical Properties Calculators (CDC-generated)
 - Glycosylation distance calculator
 - RBS epitopes prediction calculator
 - Structural distance calculator for generating fitness landscapes <https://git.biotech.cdc.gov/hxa6/fit_landscape>
@@ -171,7 +215,7 @@ flowchart TB
     classDef report fill:#F3F0FF,stroke:#7C3AED,stroke-width:1.5px,color:#1F2937;
 
     %% =====================================================
-    %% CONTROL PLANE
+    %% ORCHESTRATION
     %% =====================================================
     subgraph A["Structural Bioinformatics Workflow"]
         direction LR
@@ -279,41 +323,6 @@ flowchart TB
     class E1,E2,E3 store;
     class B2d decision;
     class D1,D2,D5 report;
-    
- ```
-The python script `monitor_manifests.py` continuously watches for new Monday and Thursday manifest files and launches Snakemake workflow automatically.
-The monitor polls both directories every 10 seconds.
-
-Usage for monitoring script:
-```bash
-tmux new -s modpro-monitor
-cd /scicomp/groups/modpro
-python monitor_manifests.py | tee monitor.log
-```
-detach from session:
-```bash
-Ctrl-b d
-```
-reattach:
-```bash
-tmux attach -t modpro-monitor
-```
-kill:
-```bash
-Ctrl-c
-```
-
-Monday/OpenFold3 pipeline is triggered when Nifi generates a manifest ending in .csv: [Nifi Monday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/881e3d30-341b-1bdc-a753-bbe492b171d4) pulls variant hashes from REFSYS and generates manifest, posted to `/scicomp/groups/modpro/manifests` triggering openfold3 job managed by snakemake.
-
-Thursday/Rosetta pipeline triggered by Nifi generating a manifest ending in .tsv automatically every Thursday in: `/scicomp/groups/modpro/manifests/rosetta_runs/`. [Nifi Thursday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/ed5534dd-55d1-1bce-bb46-805f7879ce50) runs characterization and copies parquet file output to the staging area `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` for pickup by the Nifi [protein modeling post pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/416d35ee-136d-164d-8b00-8c9645776218/Processor/d0c93509-42e2-1dd7-a766-d5259d7deeb8)
-
-DAGs for the Monday/Thursday Snakemake pipelines:
-
-## Monday's DAG
-![Monday pipeline DAG](dag_openfold3_f02725056edb1e308c7da494f103ab52.svg)
-
-## Thursday's DAG
-![Thursday pipeline DAG](dag_f02725056edb1e308c7da494f103ab52.svg)
 
 ## Privacy Standard Notice
 
