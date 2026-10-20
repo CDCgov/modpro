@@ -291,7 +291,7 @@ https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=416d35ee-136d-164d
 
 DAGs for the Monday/Thursday Snakemake pipelines:
 
-![Monday pipeline DAG](dag_openfold3_20260518_7af66c.svg)
+![Monday pipeline DAG](dag_openfold3_f02725056edb1e308c7da494f103ab52.svg)
 ![Thursday pipeline DAG](dag_f02725056edb1e308c7da494f103ab52.svg)
 
 URL for Nifi pipelines:
