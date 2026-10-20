@@ -142,30 +142,30 @@ Pass/Fail defined as:
        else FAIL
 
 
-# Monomer/Trimer dataset of ~10 recent crystal structures for H1, H3, Hvic
+## Monomer/Trimer dataset of ~10 recent crystal structures for H1, H3, Hvic
 Sialic Acid Binding Dataset <~40 known H5 sialic acid binding data, glycan array data>
 Relaxed pocket scores— add in pipeline, comment out until passes QC
 Minimal database for running openfold3 
 
-# Weekly Variant Structural Prediction Pipeline Flow
+## Weekly Variant Structural Prediction Pipeline Flow
 Updated Process Flow:
  -	Automated SQL queries against ref_sys database to identify high-priority variants (deduplication checks against existing protein_modeling entries)  
  -	Automated submission to OpenFold3 for structure prediction
  -	HA1 domain extraction, optimization by rosetta relaxation protocols for energy minimization (energy optimization enforcement for relaxed structures)
  -	Comprehensive logging and audit trails, error handling with retry mechanisms
 
-# Automated Variant Processing Pipeline
+## Automated Variant Processing Pipeline
 REFSYS ensures that limited laboratory resources (60-100 HI tests and 10-15 HINT tests per week per subtype) are allocated to specimens that will provide the maximum surveillance value.
 The six-tier classification system is particularly elegant - it balances the need for comprehensive coverage with statistical rigor, ensuring that well-characterized variants receive inferred results while directing precious testing resources toward variants that need additional characterization or represent emerging threats.
 The business case is compelling because it transforms what was likely a time-intensive, subjective process into an automated, statistically-driven system that improves both efficiency and quality while supporting CDC's broader public health mission and international surveillance partnerships. The updated pipeline should pull variants for weekly identification and processing of priority variants from REFSYS by automated SQL pull. 
 
-# Enhanced RBS Epitope Analysis
+## Enhanced RBS Epitope Analysis
 This epitope prediction tool represents integration of structural biology and immunology principles. The 15 Angstrom distance criterion is large enough to capture the full span of conformational epitopes while remaining within the physical reach of antibody binding domains. Inclusion of both surface accessibility and glycosylation analysis filter out sites without antibody accessibility. The centroid-based approach is especially valuable for RBS analysis since this region is the most functionally and immunologically important site for antigenic drift. 
 
-# Centroid-prediction tool pulls amino acids within 15 Angstroms with surface accessibility and glycosylation interaction. 
+## Centroid-prediction tool pulls amino acids within 15 Angstroms with surface accessibility and glycosylation interaction. 
 Benchmarks for RBS prediction tool: 
 
-# Sialic Acid Binding Site Analysis: 
+## Sialic Acid Binding Site Analysis: 
 Optimized Boltzmann scoring, benchmarks
 Database Schema Optimization: Remove deprecated tables and implement new analytical structures and optimize join strategies 
 HA1 Domain Focus: Transition from full HA to HA1-specific modeling
@@ -175,30 +175,31 @@ unrelaxed_pdb_data - Contains unprocessed structural data
 secondary_structure - Legacy secondary structure annotations
 test - Development/testing artifacts
 
-# Update Tables:  
+## Update Tables:  
  - 	calculated_rbs_epitope_residues - Centralized epitope analysis with geometric calculations. Update table from existing measurements to include a list of the predicted residues based on the criteria explained above. 
  - 	pipeline metadata - logging and weekly cron pull of variant runs
  - 	Sialic acid binding predictions [off mode until benchmarks passed]
 
-# HA1-Specific Modeling
+## HA1-Specific Modeling
 Transitioning from full HA to HA1-focused analysis represents a strategic shift toward more targeted and efficient modeling because of increased functional relevance: HA1 contains the receptor binding domain and primary antigenic sites; better evolutionary focus as most antigenic drift occurs in the HA1 globular head domain. Full PDB will be stored in the database for ad hoc analysis. Critical receptor binding and neutralization sites are HA1-localized and enhanced accuracy better folding predictions for smaller, more stable domains.
 
-# Computational Efficiency
+## Computational Efficiency
 Smaller domain size enables higher resolution analysis as well as containing the region with the highest pLDDT values (highest confidence) for more reliable analysis.
 
-# This pipeline generates biophysical information on each structure and includes the following, in addition to more granular features :
+## This pipeline generates biophysical information on each structure and includes the following, in addition to more granular features :
 
-#  Qualitative Metrics
+## Qualitative Metrics
 - Rosetta Energy Scores, total and per-residue (a measure of relative stability of protein in question)
 - Root mean square difference - RMS and MaxSub (a scoring of the deviation in alignment between the protein and a reference structure)
 - Relative surface accessibility per residue
 
-#  Biophysical Properties Calculators (CDC-generated)
+##  Biophysical Properties Calculators (CDC-generated)
 - Glycosylation distance calculator
 - RBS epitopes prediction calculator
 - Structural distance calculator for generating fitness landscapes <https://git.biotech.cdc.gov/hxa6/fit_landscape>
 
 ## Full Workflow Diagram
+
 ```mermaid
 
 flowchart TB
@@ -321,6 +322,7 @@ flowchart TB
     class E1,E2,E3 store;
     class B2d decision;
     class D1,D2,D5 report;
+```
 
 ## Privacy Standard Notice
 
