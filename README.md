@@ -35,6 +35,8 @@ Monday/OpenFold3 pipeline is triggered when Nifi generates a manifest ending in 
 
 Thursday/Rosetta pipeline triggered by Nifi generating a manifest ending in .tsv automatically every Thursday in: `/scicomp/groups/modpro/manifests/rosetta_runs/`. [Nifi Thursday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/ed5534dd-55d1-1bce-bb46-805f7879ce50) runs characterization and copies parquet file output to the staging area `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` for pickup by the Nifi [protein modeling post pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/416d35ee-136d-164d-8b00-8c9645776218/Processor/d0c93509-42e2-1dd7-a766-d5259d7deeb8)
 
+Protein models are selected from a SQL statement that writes to the `protein_modeling.model_priority` table. The SQL can be found in this repo under `sql` and is run from the Nifi Mondays pipeline on a Monday cron at 7am.
+
 DAGs for the Monday/Thursday Snakemake pipelines:
 
 ## Monday's DAG
@@ -140,12 +142,6 @@ Pass/Fail defined as:
        else FAIL
 - Dockings (in prog) if exists `/results/<date>_<uuid>/characterization/<date>_<uuid>_<variant_hash>/epitope_calculation/<variant_hash>.txt`
        else FAIL
-
-
-## Monomer/Trimer dataset of ~10 recent crystal structures for H1, H3, Hvic
-Sialic Acid Binding Dataset <~40 known H5 sialic acid binding data, glycan array data>
-Relaxed pocket scores— add in pipeline, comment out until passes QC
-Minimal database for running openfold3 
 
 ## Weekly Variant Structural Prediction Pipeline Flow
 Updated Process Flow:
