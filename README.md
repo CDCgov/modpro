@@ -159,7 +159,6 @@ The business case is compelling because it transforms what was likely a time-int
 This epitope prediction tool represents integration of structural biology and immunology principles. The 15 Angstrom distance criterion is large enough to capture the full span of conformational epitopes while remaining within the physical reach of antibody binding domains. Inclusion of both surface accessibility and glycosylation analysis filter out sites without antibody accessibility. The centroid-based approach is especially valuable for RBS analysis since this region is the most functionally and immunologically important site for antigenic drift. 
 
 ## Centroid-prediction tool pulls amino acids within 15 Angstroms with surface accessibility and glycosylation interaction. 
-Benchmarks for RBS prediction tool: 
 
 ## Sialic Acid Binding Site Analysis: 
 Optimized Boltzmann scoring, benchmarks
