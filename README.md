@@ -145,26 +145,23 @@ Pass/Fail defined as:
 
 ## Weekly Variant Structural Prediction Pipeline Flow
 Updated Process Flow:
- -	Automated SQL queries against ref_sys database to identify high-priority variants (deduplication checks against existing protein_modeling entries)  
- -	Automated submission to OpenFold3 for structure prediction
- -	HA1 domain extraction, optimization by rosetta relaxation protocols for energy minimization (energy optimization enforcement for relaxed structures)
- -	Comprehensive logging and audit trails, error handling with retry mechanisms
+Automated SQL queries against ref_sys database to identify high-priority variants (deduplication checks against existing protein_modeling entries)  
+Submission to OpenFold3 for structure prediction
+HA1 domain extraction, optimization by rosetta relaxation protocols for energy minimization (energy optimization enforcement for relaxed structures)
+Comprehensive logging and audit trails, error handling with retry mechanisms
 
 ## Automated Variant Processing Pipeline
-REFSYS ensures that limited laboratory resources (60-100 HI tests and 10-15 HINT tests per week per subtype) are allocated to specimens that will provide the maximum surveillance value.
-The six-tier classification system is particularly elegant - it balances the need for comprehensive coverage with statistical rigor, ensuring that well-characterized variants receive inferred results while directing precious testing resources toward variants that need additional characterization or represent emerging threats.
-The business case is compelling because it transforms what was likely a time-intensive, subjective process into an automated, statistically-driven system that improves both efficiency and quality while supporting CDC's broader public health mission and international surveillance partnerships. The updated pipeline should pull variants for weekly identification and processing of priority variants from REFSYS by automated SQL pull. 
+REFSYS ensures that limited laboratory resources (60-100 HI tests and 10-15 HINT tests per week per subtype) are allocated to specimens that provide optimal surveillance coverage.
+Inference balances the need for comprehensive coverage with statistical rigor, ensuring that well-characterized variants receive inferred results while directing testing resources toward variants that need additional characterization or represent emerging threats.
 
 ## Enhanced RBS Epitope Analysis
-This epitope prediction tool represents integration of structural biology and immunology principles. The 15 Angstrom distance criterion is large enough to capture the full span of conformational epitopes while remaining within the physical reach of antibody binding domains. Inclusion of both surface accessibility and glycosylation analysis filter out sites without antibody accessibility. The centroid-based approach is especially valuable for RBS analysis since this region is the most functionally and immunologically important site for antigenic drift. 
+Epitope prediction tool represents integration of structural biology and immunology principles. The 15 Angstrom distance criterion is large enough to capture the full span of conformational epitopes while remaining within the physical reach of antibody binding domains. Inclusion of both surface accessibility and glycosylation analysis filter out sites without antibody accessibility. The centroid-based approach is especially valuable for RBS analysis since this region is the most functionally and immunologically important site for antigenic drift. 
 
 ## Centroid-prediction tool pulls amino acids within 15 Angstroms with surface accessibility and glycosylation interaction. 
 
 ## Sialic Acid Binding Site Analysis: 
 Optimized Boltzmann scoring, benchmarks
-
 Database Schema Optimization: Remove deprecated tables and implement new analytical structures and optimize join strategies 
-
 HA1 Domain Focus: Transition from full HA to HA1-specific modeling
 
 Targeted Tables for Removal:
