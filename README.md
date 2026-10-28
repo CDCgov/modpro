@@ -170,8 +170,11 @@ test - Development/testing artifacts
 
 ## Updates to NDW Tables:  
 `protein_modeling.rbs_epitope`- calculation of distance to receptor binding site in Angstroms and surface accessibility calc, for use in determining whether epitope footprint maps are predicted to change. 
+
 `protein_modeling.plddt` - includes per-residue data on Openfold3 confidence scores
+
 `protein_modeling.logging` - parses log files for completed steps, if all successful, `status` = SUCCESS otherwise the variant is FAILED and rerun.
+
 `protein_modeling.qc` - sanity check summary for variants passed through pipeline, collates data from energy scores before and after Rosetta relaxation, reports RMS and Maxsub values relative to subtype-specific variants, average pLDDT for the HA1. 
 
 Sialic acid binding predictions in dev [off mode until benchmarks passed], see dokken repo for a pilot example. 
