@@ -170,10 +170,13 @@ unrelaxed_pdb_data - Contains unprocessed structural data
 secondary_structure - Legacy secondary structure annotations
 test - Development/testing artifacts
 
-## Update Tables:  
- - 	calculated_rbs_epitope_residues - Centralized epitope analysis with geometric calculations. Update table from existing measurements to include a list of the predicted residues based on the criteria explained above. 
- - 	pipeline metadata - logging and weekly cron pull of variant runs
- - 	Sialic acid binding predictions [off mode until benchmarks passed]
+## Updates to NDW Tables:  
+`protein_modeling.rbs_epitope`- calculation of distance to receptor binding site in Angstroms and surface accessibility calc, for use in determining whether epitope footprint maps are predicted to change. 
+`protein_modeling.plddt` - includes per-residue data on Openfold3 confidence scores
+`protein_modeling.logging` - parses log files for completed steps, if all successful, `status` = SUCCESS otherwise the variant is FAILED and rerun.
+`protein_modeling.qc` - sanity check summary for variants passed through pipeline, collates data from energy scores before and after Rosetta relaxation, reports RMS and Maxsub values relative to subtype-specific variants, average pLDDT for the HA1. 
+
+Sialic acid binding predictions in dev [off mode until benchmarks passed], see dokken repo for a pilot example. 
 
 ## HA1-Specific Modeling
 Transitioning from full HA to HA1-focused analysis represents a strategic shift toward more targeted and efficient modeling because of increased functional relevance: HA1 contains the receptor binding domain and primary antigenic sites; better evolutionary focus as most antigenic drift occurs in the HA1 globular head domain. Full PDB will be stored in the database for ad hoc analysis. Critical receptor binding and neutralization sites are HA1-localized and enhanced accuracy better folding predictions for smaller, more stable domains.
