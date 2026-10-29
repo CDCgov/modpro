@@ -322,6 +322,39 @@ flowchart TB
     class B2d decision;
     class D1,D2,D5 report;
 ```
+# Pipeline timing
+
+Derived from 82 stage logs across 9 variant runs on `scbs-vsdb-01`, 2026-10-28.
+Durations are wall clock from each log's own start and completion timestamps.
+
+## Per-stage runtime
+
+| Stage | Runs | Min | Median | Mean | Max | Resources | Source |
+|---|---:|---:|---:|---:|---:|---|---|
+| `msa` | 2 | 17m33s | 19m48s | 19m48s | 22m02s | 32 threads, 2 slots | start/stop stamps |
+| `prediction` | 2 | 6m38s | 6m38s | 6m38s | 6m39s | 1 GPU, 1 slot | start/stop stamps |
+| `relax` | 6 | 11m36s | 12m44s | 12m54s | 15m07s | 1 core | start/stop stamps |
+| `reference_compare` | 6 | 1m11s | 1m30s | 1m46s | 2m41s | 1 core | start/stop stamps |
+| `rosetta_score` | 6 | 7s | 12s | 13s | 17s | 1 core | start/stop stamps |
+| `plddt` | 7 | 2s | 2s | 4s | 12s | 1 core | start/stop stamps |
+| `relaxed_score` | 6 | 3s | 4s | 4s | 4s | 1 core | start/stop stamps |
+| `extract_chainA_HA1` | 1 | 11s | 11s | 11s | 11s | 1 core | start/stop stamps |
+| `structural_distance` | 5 | — | — | ~1m50s | — | 1 core | inferred from gap |
+| `epitope_exposure` | 5 | <1s | <1s | <1s | <1s | 1 core | start stamp only |
+| `getcontacts` | 5 | <1s | <1s | <1s | <1s | 1 core | start stamp only |
+| `glycan_distance` | 5 | <1s | <1s | <1s | <1s | 1 core | start stamp only |
+| `residue_energy_breakdown` | 5 | <1s | <1s | <1s | <1s | 1 core | start stamp only |
+| `variant_complete` | 5 | <1s | <1s | <1s | <1s | 1 core | start stamp only |
+| `best_HA.inner` | 5 | <1s | <1s | <1s | <1s | 1 core | start stamp only |
+| `best_energy_ha1` | 5 | <1s | <1s | <1s | <1s | 1 core | start stamp only |
+
+## Concurrency limits in effect
+
+| Leg | Limit | Set by | Per-variant cost | Amortized per variant |
+|---|---|---|---:|---:|
+| MSA | 2 concurrent | `--resources msa_slots=2` | 19m48s | 9m54s |
+| Prediction | 1 concurrent | `--resources inference_slots=1` | 6m38s | 6m38s |
+| Rosetta chain | cores available | `THURSDAY_CORES=32` | 16m47s | varies with width |
 
 ## Privacy Standard Notice
 
