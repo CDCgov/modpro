@@ -1,0 +1,16 @@
+output_writer_settings:
+  structure_format: pdb
+
+model_update:
+  presets:
+    - predict
+    - pae_enabled
+  custom:
+    settings:
+      memory:
+        eval:
+          use_deepspeed_evo_attention: false
+          use_cueq_triangle_kernels: true
+        train:
+          use_deepspeed_evo_attention: false
+          use_cueq_triangle_kernels: true

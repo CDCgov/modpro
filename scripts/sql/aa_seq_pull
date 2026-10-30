@@ -1,0 +1,6 @@
+SELECT DISTINCT arm.variant_hash,arm.aa_seq 
+FROM gaa.alignments_rough_merge AS arm 
+INNER JOIN gaa.isolate_standard_rank AS isr ON arm.isolate_hash = isr.isolate_hash 
+WHERE isr.gaa_original_ranking = 1 
+AND arm.aa_seq NOT LIKE '%X%' 
+AND arm.variant_hash = '' 

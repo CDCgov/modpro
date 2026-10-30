@@ -1,0 +1,239 @@
+SELECT DISTINCT cdc_hash_count.variant_hash AS variant_hash
+FROM (SELECT CASE WHEN I.isl_ha_genetic_group LIKE "3C%" AND I.isl_ha_type like "%H3%" THEN "H3" WHEN I.isl_ha_genetic_group LIKE "6B%" AND I.isl_ha_type like "%H1%" 
+  THEN "H1" WHEN I.isl_ha_genetic_group LIKE "V1A%" AND I.isl_type = "B" THEN "Bvic" WHEN I.isl_ha_genetic_group LIKE "Y%" AND I.isl_type = "B" 
+  THEN "Byam" END as subtype, A.protein, A.variant_hash, concat(cast(TO_DATE('2025-01-01') AS STRING), ":",  cast(TO_DATE('2025-01-01') AS STRING)) as date_range, 
+  count(DISTINCT I.case_id) as global_hash_count_date_range FROM gaa.alignments_rough_merge A 
+ INNER JOIN gaa.isolate_standard_rough_merge I ON A.isolate_hash = I.isolate_hash 
+  WHERE A.cds_id IS NOT NULL AND ((A.ctype IN ('A_HA_H3', 'A_NA_N2', 'A_MP', 'A_NP', 'A_NS','A_PA', 'A_PB1', 'A_PB2') AND A.reference_id = 'HK4801') 
+OR (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07') OR (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60') 
+OR (A.ctype IN ('B_MP', 'B_NA', 'B_NP', 'B_PA', 'B_PB1','B_PB2') AND A.reference_id = 'PHUKET3073')) 
+AND I.reason_for_submission = "surveillance" AND I.collection_date BETWEEN TO_DATE('2025-01-01') AND TO_DATE('2024-04-16') AND A.protein = 'HA' 
+  GROUP BY CASE WHEN I.isl_ha_genetic_group LIKE "3C%" AND I.isl_ha_type like "%H3%" THEN "H3" WHEN I.isl_ha_genetic_group LIKE "6B%" AND I.isl_ha_type like "%H1%" 
+  THEN "H1" WHEN I.isl_ha_genetic_group LIKE "V1A%" AND I.isl_type = "B" THEN "Bvic" 
+  WHEN I.isl_ha_genetic_group LIKE "Y%" AND I.isl_type = "B" THEN "Byam" END, 
+  A.protein, A.variant_hash, concat(cast(TO_DATE('{date_start}') AS STRING), ":",  cast(TO_DATE('{date_start}') AS STRING)) ORDER BY count(DISTINCT I.case_id) DESC 
+) master_hash_date_delim LEFT OUTER JOIN (SELECT CASE WHEN I.isl_ha_genetic_group LIKE "3C%" AND I.isl_ha_type like "%H3%" 
+  THEN "H3" WHEN I.isl_ha_genetic_group LIKE "6B%" AND I.isl_ha_type like "%H1%" THEN "H1" WHEN I.isl_ha_genetic_group LIKE "V1A%" AND I.isl_type = "B" 
+  THEN "Bvic" WHEN I.isl_ha_genetic_group LIKE "Y%" AND I.isl_type = "B" THEN "Byam" 
+  END as subtype,A.protein, A.variant_hash,count(DISTINCT I.cdc_id) as total_cdc_hash_count FROM gaa.alignments_rough_merge A 
+  INNER JOIN gaa.isolate_standard_rough_merge I 
+  ON A.isolate_hash = I.isolate_hash WHERE A.cds_id IS NOT NULL 
+    AND ((A.ctype IN ('A_HA_H3', 'A_NA_N2', 'A_MP', 'A_NP', 'A_NS', 'A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801') OR (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07') 
+OR (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60') OR (A.ctype IN ('B_MP', 'B_NA','B_NP','B_PA','B_PB1','B_PB2') 
+AND A.reference_id = 'PHUKET3073')) AND I.reason_for_submission = "surveillance" AND I.host_common_name = "human" 
+AND A.protein = 'HA' GROUP BY CASE WHEN I.isl_ha_genetic_group LIKE "3C%" AND I.isl_ha_type like "%H3%" 
+THEN "H3" WHEN I.isl_ha_genetic_group LIKE "6B%" AND I.isl_ha_type like "%H1%" THEN "H1" WHEN I.isl_ha_genetic_group LIKE "V1A%" AND I.isl_type = "B" 
+  THEN "Bvic" WHEN I.isl_ha_genetic_group LIKE "Y%" AND I.isl_type = "B" 
+  THEN "Byam" END, A.protein, A.variant_hash) cdc_hash_count ON ((master_hash_date_delim.variant_hash = cdc_hash_count.variant_hash) AND (master_hash_date_delim.subtype = cdc_hash_count.subtype) AND (master_hash_date_delim.protein = cdc_hash_count.protein)) 
+  LEFT OUTER JOIN (SELECT CASE WHEN I.isl_ha_genetic_group LIKE "3C%" AND I.isl_ha_type like "%H3%" 
+  THEN "H3" WHEN I.isl_ha_genetic_group LIKE "6B%" AND I.isl_ha_type like "%H1%" 
+  THEN "H1" WHEN I.isl_ha_genetic_group LIKE "V1A%" AND I.isl_type = "B" 
+  THEN "Bvic" WHEN I.isl_ha_genetic_group LIKE "Y%" AND I.isl_type = "B" 
+  THEN "Byam" END as subtype, A.protein, A.variant_hash, count(DISTINCT if(I.passage_category = "CELL", I.isolate_id, NULL)) as total_cdc_cell_isolates, 
+  count(DISTINCT if(I.passage_category = "CELL" AND HA.aa_changes is NULL and NA.aa_changes is NULL, I.isolate_id, NULL)) as total_clean_cdc_cell_isolates 
+  FROM gaa.alignments_rough_merge A 
+  INNER JOIN gaa.isolate_standard_rough_merge I 
+  ON A.isolate_hash = I.isolate_hash 
+  LEFT JOIN (SELECT * FROM gaa.variant_aa_changes WHERE ((gene IN ('A_HA_H3','A_NA_N2','A_MP','A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+AND reference_id = 'HK4801') OR (gene IN ('A_HA_H1', 'A_NA_N1') AND reference_id = 'CALI07') 
+ OR (gene IN ('B_HA', 'B_NS') AND reference_id = 'BRISBANE60') 
+OR (gene IN ('B_MP', 'B_NA', 'B_NP', 'B_PA', 'B_PB1', 'B_PB2') 
+AND reference_id = 'PHUKET3073')) AND protein = "HA" 
+  ) HA ON A.cdc_id = HA.cdc_id AND A.isolate_id = HA.isolate_id 
+LEFT JOIN ( SELECT * FROM gaa.variant_aa_changes WHERE ((gene IN ('A_HA_H3', 
+'A_NA_N2', 'A_MP','A_NP', 'A_NS', 'A_PA','A_PB1', 'A_PB2') 
+AND reference_id = 'HK4801') OR (gene IN ('A_HA_H1', 'A_NA_N1') 
+ AND reference_id = 'CALI07') OR (gene IN ('B_HA', 'B_NS') 
+AND reference_id = 'BRISBANE60') OR (gene IN ('B_MP','B_NA', 'B_NP', 'B_PA', 'B_PB1','B_PB2') 
+ AND reference_id = 'PHUKET3073')) AND protein = "NA" ) NA 
+  ON A.cdc_id = NA.cdc_id AND A.isolate_id = NA.isolate_id 
+  WHERE A.cds_id IS NOT NULL AND ((A.ctype IN ('A_HA_H3', 'A_NA_N2', 'A_MP', 'A_NP', 'A_NS', 'A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801') OR (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07') 
+OR (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60') OR (A.ctype IN ('B_MP', 'B_NA', 'B_NP','B_PA','B_PB1','B_PB2') AND A.reference_id = 'PHUKET3073')) 
+AND I.reason_for_submission = "surveillance" AND I.host_common_name = "human" AND A.protein = 'HA' 
+GROUP BY CASE WHEN I.isl_ha_genetic_group LIKE "3C%" AND I.isl_ha_type like "%H3%" THEN "H3" WHEN I.isl_ha_genetic_group LIKE "6B%" AND I.isl_ha_type like "%H1%" 
+  THEN "H1" WHEN I.isl_ha_genetic_group LIKE "V1A%" AND I.isl_type = "B"  THEN "Bvic" WHEN I.isl_ha_genetic_group LIKE "Y%" AND I.isl_type = "B" 
+  THEN "Byam" END, A.protein, A.variant_hash) cdc_isolate_count ON ((master_hash_date_delim.variant_hash = cdc_isolate_count.variant_hash) AND (master_hash_date_delim.protein = cdc_isolate_count.protein) AND (master_hash_date_delim.subtype = cdc_isolate_count.subtype)) 
+  LEFT OUTER JOIN (SELECT A.variant_hash,A.protein,CASE WHEN T.test_subtype = "H1 swl" AND T.ag_clade LIKE "6B%" 
+THEN "H1" WHEN T.test_subtype = "H3" AND T.ag_clade LIKE "3C%" THEN "H3" 
+WHEN T.test_subtype = "B yam" AND T.ag_clade LIKE "Y%" THEN "Byam" WHEN T.test_subtype = "B vic" AND T.ag_clade LIKE "V%" THEN "Bvic" 
+  END as subtype,count(DISTINCT if(T.test_type = "HINT", T.ag_cdc_id, NULL)) as total_cdc_id_hint_tested, udx.sort_list(group_concat(DISTINCT if(T.test_type = "HINT", T.ag_cdc_id, NULL), ", "), ", ") as all_cdc_id_hint_tested, 
+  count(DISTINCT if(T.test_type = "HI", T.ag_cdc_id, NULL)) as total_cdc_id_hi_tested,udx.sort_list(group_concat(DISTINCT if(T.test_type = "HI", T.ag_cdc_id, NULL), ", "), ", ") as all_cdc_id_hi_tested, 
+  count(DISTINCT if(T.test_type = "FRA", T.ag_cdc_id, NULL)) as total_cdc_id_fra_tested,udx.sort_list(group_concat(DISTINCT if(T.test_type = "FRA", T.ag_cdc_id, NULL), ", "), ", ") as all_cdc_id_fra_tested, 
+  count(DISTINCT if(T.test_type = "large", T.ag_cdc_id, NULL)) as total_cdc_id_large_fra_tested,udx.sort_list(group_concat(DISTINCT if(T.test_type = "large", T.ag_cdc_id, NULL), ", "), ", ") as all_cdc_id_large_fra_tested,
+  count(DISTINCT if(T.test_type = "experimental", T.ag_cdc_id, NULL)) as total_cdc_id_experimental_tested,udx.sort_list(group_concat(DISTINCT if(T.test_type = "experimental", T.ag_cdc_id, NULL), ", "), ", ") as all_cdc_id_experimental_tested,
+  count(DISTINCT T.ag_cdc_id) as total_cdc_id_any_assay_tested,udx.sort_list(group_concat(DISTINCT T.ag_cdc_id, ", "), ", ") as all_cdc_id_any_assay_tested 
+  FROM dais.antigenic_tests T 
+  INNER JOIN gaa.alignments_rough_merge A 
+  ON T.ag_cdc_id = A.cdc_id AND T.ag_sequenced_isolate_id = A.isolate_id WHERE T.titer_error = FALSE AND T.ag_type = "test" 
+  AND T.ag_do_not_report = FALSE AND T.titer_reportable = TRUE AND ((T.test_subtype = "H1 swl" AND T.ag_clade LIKE "6B%") OR 
+       (T.test_subtype = "H3" AND T.ag_clade LIKE "3C%") OR (T.test_subtype = "B yam" AND T.ag_clade LIKE "Y%") OR (T.test_subtype = "B vic" AND T.ag_clade LIKE "V%")) 
+  AND ((A.ctype IN ('A_HA_H3','A_NA_N2','A_MP','A_NP','A_NS','A_PA','A_PB1', 'A_PB2') AND A.reference_id = 'HK4801') 
+OR (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07') OR (A.ctype IN ('B_HA', 'B_NS') 
+AND A.reference_id = 'BRISBANE60') OR (A.ctype IN ('B_MP', 'B_NA','B_NP','B_PA','B_PB1','B_PB2') AND A.reference_id = 'PHUKET3073')) 
+  AND A.protein = 'HA' AND A.variant_hash IS NOT NULL GROUP BY A.variant_hash, 
+  A.protein, CASE WHEN T.test_subtype = "H1 swl" AND T.ag_clade LIKE "6B%" 
+THEN "H1" WHEN T.test_subtype = "H3" AND T.ag_clade LIKE "3C%" THEN "H3" 
+WHEN T.test_subtype = "B yam" AND T.ag_clade LIKE "Y%" THEN "Byam" WHEN T.test_subtype = "B vic" AND T.ag_clade LIKE "V%" THEN "Bvic" END 
+) cdc_tested_count ON ((master_hash_date_delim.variant_hash = cdc_tested_count.variant_hash) AND (master_hash_date_delim.protein = cdc_tested_count.protein) AND (master_hash_date_delim.subtype = cdc_tested_count.subtype)) 
+  LEFT OUTER JOIN (SELECT CASE WHEN R.alias like "H3%" THEN "H3" WHEN R.alias like "H1%" 
+  THEN "H1" WHEN R.alias like "BVIC%" THEN "Bvic" WHEN R.alias like "BYAM%" 
+  THEN "Byam" END as ref_subtype,R.alias,R.aa_aln as ref_aln,udx.mutation_list_gly(R.aa_aln, A.aa_aln) as aa_mutations, A.* 
+  FROM gaa.refs_for_diffs_pub_seq_v2 R INNER JOIN (SELECT 
+ A.variant_hash, A.reference_id, A.protein, CASE WHEN (A.ctype IN ('A_HA_H3','A_NA_N2','A_MP', 'A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "3C%") THEN "H3" 
+WHEN (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07' AND I.isl_ha_genetic_group LIKE "6B%") 
+THEN "H1" WHEN (A.ctype IN ('A_MP','A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+ AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "6B%") 
+THEN "H1" WHEN  (A.ctype IN ('B_HA', 'B_NS') 
+ AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "V%") 
+THEN "Bvic" WHEN (A.ctype IN ('B_MP','B_NA','B_NP','B_PA', 'B_PB1', 'B_PB2') 
+ AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "V%") THEN "Bvic" 
+WHEN (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "Y%") 
+THEN "Byam" WHEN (A.ctype IN ('B_MP','B_NA','B_NP','B_PA', 'B_PB1', 'B_PB2') 
+AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "Y%") THEN "Byam" 
+END as subtype, A.aa_aln FROM gaa.alignments_rough_merge A 
+INNER JOIN gaa.isolate_standard_rough_merge I ON A.isolate_hash = I.isolate_hash 
+ WHERE A.cds_id IS NOT NULL AND ((A.ctype IN ('A_HA_H3','A_NA_N2', 'A_MP', 'A_NP','A_NS', 'A_PA', 'A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801')  OR (A.ctype IN ('A_HA_H1', 'A_NA_N1') 
+AND A.reference_id = 'CALI07') OR (A.ctype IN ('B_HA', 'B_NS') 
+ AND A.reference_id = 'BRISBANE60') OR (A.ctype IN ('B_MP','B_NA','B_NP','B_PA','B_PB1','B_PB2') 
+AND A.reference_id = 'PHUKET3073')) AND CASE 
+WHEN (A.ctype IN ('A_HA_H3', 'A_NA_N2', 'A_MP', 'A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "3C%") 
+THEN "H3" WHEN (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07' AND I.isl_ha_genetic_group LIKE "6B%") 
+ THEN "H1" WHEN (A.ctype IN ('A_MP', 'A_NP','A_NS', 'A_PA',  'A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "6B%") THEN "H1" 
+WHEN  (A.ctype IN ('B_HA', 'B_NS') 
+AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "V%") 
+THEN "Bvic" WHEN (A.ctype IN ('B_MP', 'B_NA','B_NP', 'B_PA', 'B_PB1', 'B_PB2') 
+ AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "V%") 
+THEN "Bvic" WHEN (A.ctype IN ('B_HA',  'B_NS') AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "Y%") THEN "Byam" 
+ WHEN (A.ctype IN ('B_MP', 'B_NA', 'B_NP', 'B_PA', 'B_PB1',  'B_PB2') 
+AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "Y%") THEN "Byam" 
+END IN ("H3","H1","Bvic","Byam") GROUP BY A.variant_hash, A.reference_id, A.protein, 
+CASE WHEN (A.ctype IN ('A_HA_H3','A_NA_N2','A_MP','A_NP', 'A_NS','A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "3C%") THEN "H3" 
+WHEN (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07' AND I.isl_ha_genetic_group LIKE "6B%") 
+THEN "H1" WHEN (A.ctype IN ('A_MP','A_NP','A_NS','A_PA', 'A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "6B%") THEN "H1" 
+WHEN  (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "V%") 
+THEN "Bvic" WHEN (A.ctype IN ('B_MP','B_NA', 'B_NP','B_PA','B_PB1','B_PB2') 
+ AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "V%") THEN "Bvic" 
+WHEN (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "Y%") 
+THEN "Byam" WHEN (A.ctype IN ('B_MP','B_NA','B_NP','B_PA','B_PB1','B_PB2') AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "Y%") 
+THEN "Byam" END, A.aa_aln) A 
+ON CASE WHEN R.alias like "H3%" THEN "H3" WHEN R.alias like "H1%" THEN "H1" WHEN R.alias like "BVIC%" 
+ THEN "Bvic" WHEN R.alias like "BYAM%" THEN "Byam" END = A.subtype 
+  AND R.reference_id = A.reference_id AND R.protein = A.protein WHERE R.alias in ( 'BVIC_B/Austria/1359417/2021_S1C4/C2_REF', 'BYAM_B/Phuket/3073/2013_C2/C6_REF', 'H1_A/Wisconsin/588/2019_QMC2_REF', 'H3_A/Darwin/6/2021_S2_REF' ) 
+ AND R.protein = 'HA' AND A.protein = 'HA') custom_aa_diffs ON ((master_hash_date_delim.subtype = custom_aa_diffs.ref_subtype) AND (master_hash_date_delim.variant_hash = custom_aa_diffs.variant_hash) AND (master_hash_date_delim.protein = custom_aa_diffs.protein)) 
+  LEFT OUTER JOIN (SELECT F.* FROM (SELECT T.*, dense_rank() over(PARTITION BY T.variant_hash, T.reference_id, T.protein, T.subtype ORDER BY T.hash_count DESC, T.isl_ha_genetic_group DESC) as clade_rank 
+FROM (SELECT A.variant_hash,A.reference_id,A.protein,I.isl_ha_genetic_group, CASE WHEN (A.ctype IN ('A_HA_H3','A_NA_N2','A_MP','A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "3C%") THEN "H3" 
+WHEN (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07' AND I.isl_ha_genetic_group LIKE "6B%") 
+THEN "H1" WHEN (A.ctype IN ('A_MP', 'A_NP','A_NS','A_PA','A_PB1', 'A_PB2') AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "6B%") 
+THEN "H1" WHEN  (A.ctype IN ('B_HA','B_NS') 
+AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "V%") THEN "Bvic" 
+WHEN (A.ctype IN ('B_MP','B_NA','B_NP','B_PA','B_PB1','B_PB2') 
+AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "V%") 
+ THEN "Bvic" WHEN (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "Y%") THEN "Byam" 
+ WHEN (A.ctype IN ('B_MP','B_NA','B_NP', 'B_PA','B_PB1','B_PB2') 
+ AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "Y%") THEN "Byam" 
+END as subtype, count(DISTINCT I.case_id) as hash_count FROM gaa.alignments_rough_merge A 
+INNER JOIN gaa.isolate_standard_rough_merge I 
+ON A.isolate_hash = I.isolate_hash WHERE A.cds_id IS NOT NULL 
+AND ((A.ctype IN ('A_HA_H3','A_NA_N2','A_MP','A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801') OR (A.ctype IN ('A_HA_H1', 'A_NA_N1') 
+AND A.reference_id = 'CALI07') OR (A.ctype IN ('B_HA', 'B_NS') 
+AND A.reference_id = 'BRISBANE60') OR (A.ctype IN ('B_MP','B_NA','B_NP','B_PA','B_PB1','B_PB2') 
+ AND A.reference_id = 'PHUKET3073')) AND CASE WHEN (A.ctype IN ('A_HA_H3','A_NA_N2','A_MP','A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+ AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "3C%") THEN "H3" 
+WHEN (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07' AND I.isl_ha_genetic_group LIKE "6B%") 
+THEN "H1" WHEN (A.ctype IN ('A_MP','A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "6B%") THEN "H1" 
+WHEN (A.ctype IN ('B_HA','B_NS') AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "V%") THEN "Bvic" 
+WHEN (A.ctype IN ('B_MP','B_NA','B_NP', 'B_PA','B_PB1','B_PB2')  AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "V%") 
+THEN "Bvic" WHEN (A.ctype IN ('B_HA','B_NS') AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "Y%") 
+THEN "Byam" WHEN (A.ctype IN ('B_MP', 'B_NA','B_NP','B_PA','B_PB1', 'B_PB2') 
+ AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "Y%") THEN "Byam" 
+END IN ("H3","H1","Bvic","Byam") GROUP BY 
+A.variant_hash,A.reference_id,A.protein,I.isl_ha_genetic_group,
+CASE WHEN (A.ctype IN ('A_HA_H3','A_NA_N2','A_MP','A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "3C%") THEN "H3" 
+WHEN (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07' AND I.isl_ha_genetic_group LIKE "6B%") 
+THEN "H1" WHEN (A.ctype IN ('A_MP', 'A_NP','A_NS','A_PA','A_PB1','A_PB2') 
+AND A.reference_id = 'HK4801' AND I.isl_ha_genetic_group LIKE "6B%")
+THEN "H1" WHEN  (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "V%") THEN "Bvic" 
+WHEN (A.ctype IN ('B_MP','B_NA','B_NP','B_PA', 'B_PB1','B_PB2') AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "V%") 
+THEN "Bvic" WHEN (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60' AND I.isl_ha_genetic_group LIKE "Y%") THEN "Byam" 
+WHEN (A.ctype IN ('B_MP', 'B_NA', 'B_NP',  'B_PA', 'B_PB1', 'B_PB2') AND A.reference_id = 'PHUKET3073' AND I.isl_ha_genetic_group LIKE "Y%") 
+THEN "Byam" END) T 
+  ) F WHERE F.clade_rank = 1 AND F.protein = 'HA') hash_clades ON ((master_hash_date_delim.variant_hash = hash_clades.variant_hash) AND (master_hash_date_delim.subtype = hash_clades.subtype) AND (master_hash_date_delim.protein = hash_clades.protein)) 
+  LEFT OUTER JOIN ( SELECT CASE WHEN I.isl_ha_genetic_group LIKE "3C%" AND I.isl_ha_type like "%H3%" THEN "H3" 
+  WHEN I.isl_ha_genetic_group LIKE "6B%" AND I.isl_ha_type like "%H1%" THEN "H1" WHEN I.isl_ha_genetic_group LIKE "V1A%" AND I.isl_type = "B" 
+  THEN "Bvic" WHEN I.isl_ha_genetic_group LIKE "Y%" AND I.isl_type = "B" THEN "Byam" 
+  END as subtype, A.protein,A.variant_hash, count(DISTINCT I.cdc_id) as total_cdc_id_with_titration 
+  FROM gaa.alignments_rough_merge A 
+  INNER JOIN gaa.isolate_standard_rough_merge I 
+  ON A.isolate_hash = I.isolate_hash 
+  INNER JOIN ( SELECT cdcid_text as cdc_id, group_concat(to_date(hint_titration_date), ",") as titration_date FROM flulabdb.flulabdb_to_cdp_data_vw 
+    WHERE hint_titration_date is NOT NULL GROUP BY cdcid_text ) T 
+  ON A.cdc_id = T.cdc_id WHERE A.cds_id IS NOT NULL AND ((A.ctype IN ('A_HA_H3','A_NA_N2','A_MP','A_NP','A_NS','A_PA','A_PB1', 'A_PB2') 
+AND A.reference_id = 'HK4801') OR (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07') OR (A.ctype IN ('B_HA', 'B_NS') 
+ AND A.reference_id = 'BRISBANE60') OR (A.ctype IN ('B_MP', 'B_NA', 'B_NP','B_PA','B_PB1', 'B_PB2') AND A.reference_id = 'PHUKET3073')) 
+  AND I.reason_for_submission = "surveillance" AND I.host_common_name = "human" AND A.protein = 'HA' 
+  GROUP BY CASE WHEN I.isl_ha_genetic_group LIKE "3C%" AND I.isl_ha_type like "%H3%" THEN "H3" WHEN I.isl_ha_genetic_group LIKE "6B%" AND I.isl_ha_type like "%H1%" 
+  THEN "H1" WHEN I.isl_ha_genetic_group LIKE "V1A%" AND I.isl_type = "B" THEN "Bvic" WHEN I.isl_ha_genetic_group LIKE "Y%" AND I.isl_type = "B" 
+  THEN "Byam" END, A.protein, A.variant_hash) titration_count ON ((master_hash_date_delim.variant_hash = titration_count.variant_hash) AND (master_hash_date_delim.protein = titration_count.protein) AND (master_hash_date_delim.subtype = titration_count.subtype)) 
+  LEFT OUTER JOIN (SELECT A.variant_hash,A.protein, count(DISTINCT if(W.step_name = "HINT", S.cdc_id, NULL)) as count_cdc_id_pending_hint, udx.sort_list(group_concat(DISTINCT if(W.step_name = "HINT", S.cdc_id, NULL), ", "), ", ") all_pending_hint_cdc_ids,
+  udx.sort_list(group_concat(DISTINCT if(W.step_name = "HINT", L.cuid, NULL), ", "), ", ") all_pending_hint_cuids, count(DISTINCT if(W.step_name = "HI", S.cdc_id, NULL)) as count_cdc_id_pending_hi,
+  udx.sort_list(group_concat(DISTINCT if(W.step_name = "HI", S.cdc_id, NULL), ", "), ", ") all_pending_hi_cdc_ids,
+  udx.sort_list(group_concat(DISTINCT if(W.step_name = "HI", L.cuid, NULL), ", "), ", ") all_pending_hi_cuids
+  FROM disc.flu_workflowstep W INNER JOIN disc.flu_aliquot L on L.id = W.aliquot_id 
+  INNER JOIN disc_denorm.isolate I ON L.isolate_id = I.isolate_id 
+  INNER JOIN disc_denorm.specimen S ON I.cdc_id = S.cdc_id LEFT ANTI JOIN( SELECT * FROM dais.antigenic_tests 
+ WHERE titer_error is FALSE AND titer_reportable = TRUE) T 
+ ON S.cdc_id = T.ag_cdc_id INNER JOIN gaa.alignments_rough_merge A 
+  ON I.isolate_id = A.isolate_id WHERE W.date_added is not null 
+  AND W.step_name in ("HINT", "HI") AND W.test_name = "Virus Isolation" 
+  AND W.test_category = "Ref Lab Isolation" AND L.short_code in ("RHI", "REF") 
+  AND A.protein = 'HA' AND ((A.ctype IN ('A_HA_H3', 'A_NA_N2','A_MP','A_NP','A_NS','A_PA','A_PB1', 'A_PB2') AND A.reference_id = 'HK4801') 
+OR (A.ctype IN ('A_HA_H1', 'A_NA_N1') AND A.reference_id = 'CALI07') OR (A.ctype IN ('B_HA', 'B_NS') 
+ AND A.reference_id = 'BRISBANE60') OR (A.ctype IN ('B_MP', 'B_NA', 'B_NP','B_PA', 'B_PB1', 'B_PB2') 
+AND A.reference_id = 'PHUKET3073')) GROUP BY 
+  A.variant_hash, A.protein ) pending_testing ON ((master_hash_date_delim.variant_hash = pending_testing.variant_hash) AND (master_hash_date_delim.protein = pending_testing.protein)) 
+  LEFT OUTER JOIN ( SELECT A.variant_hash, A.protein, CASE WHEN T.test_subtype = "H1 swl" AND T.ag_clade LIKE "6B%" THEN "H1" 
+    WHEN T.test_subtype = "H3" AND T.ag_clade LIKE "3C%" THEN "H3" WHEN T.test_subtype = "B yam" AND T.ag_clade LIKE "Y%" 
+    THEN "Byam" WHEN T.test_subtype = "B vic" AND T.ag_clade LIKE "V%" THEN "Bvic" 
+  END as subtype, count(DISTINCT if(T.test_type = "HINT", T.ag_cdc_id, NULL)) as date_range_count_cdc_id_hint_tested,
+  udx.sort_list(group_concat(DISTINCT if(T.test_type = "HINT", T.ag_cdc_id, NULL), ", "), ", ") as date_range_cdc_id_hint_tested,
+  count(DISTINCT if(T.test_type = "HI", T.ag_cdc_id, NULL)) as date_range_count_cdc_id_hi_tested,
+  udx.sort_list(group_concat(DISTINCT if(T.test_type = "HI", T.ag_cdc_id, NULL), ", "), ", ") as date_range_cdc_id_hi_tested,
+  count(DISTINCT if(T.test_type = "FRA", T.ag_cdc_id, NULL)) as date_range_count_cdc_id_fra_tested,
+  udx.sort_list(group_concat(DISTINCT if(T.test_type = "FRA", T.ag_cdc_id, NULL), ", "), ", ") as date_range_cdc_id_fra_tested,
+  count(DISTINCT if(T.test_type = "large", T.ag_cdc_id, NULL)) as date_range_count_cdc_id_large_fra_tested,
+  udx.sort_list(group_concat(DISTINCT if(T.test_type = "large", T.ag_cdc_id, NULL), ", "), ", ") as date_range_cdc_id_large_fra_tested,
+  count(DISTINCT if(T.test_type = "experimental", T.ag_cdc_id, NULL)) as date_range_count_cdc_id_experimental_tested,
+  udx.sort_list(group_concat(DISTINCT if(T.test_type = "experimental", T.ag_cdc_id, NULL), ", "), ", ") as date_range_cdc_id_experimental_tested,
+  count(DISTINCT T.ag_cdc_id) as date_range_count_cdc_id_any_assay_tested,
+  udx.sort_list(group_concat(DISTINCT T.ag_cdc_id, ", "), ", ") as date_range_cdc_id_any_assay_tested
+  FROM dais.antigenic_tests T INNER JOIN gaa.alignments_rough_merge A ON T.ag_cdc_id = A.cdc_id 
+  AND T.ag_sequenced_isolate_id = A.isolate_id WHERE T.titer_error = FALSE AND T.ag_type = "test" 
+  AND T.ag_do_not_report = FALSE AND T.titer_reportable = TRUE AND cast(T.test_date as TIMESTAMP) BETWEEN TO_DATE('2024-01-01') AND TO_DATE('2024-03-25') 
+  AND ((T.test_subtype = "H1 swl" AND T.ag_clade LIKE "6B%") OR 
+       (T.test_subtype = "H3" AND T.ag_clade LIKE "3C%") OR 
+       (T.test_subtype = "B yam" AND T.ag_clade LIKE "Y%") OR 
+       (T.test_subtype = "B vic" AND T.ag_clade LIKE "V%")) 
+  AND ((A.ctype IN ('A_HA_H3', 'A_NA_N2','A_MP', 'A_NP','A_NS', 'A_PA', 'A_PB1','A_PB2') 
+ AND A.reference_id = 'HK4801') OR (A.ctype IN ('A_HA_H1', 'A_NA_N1') 
+AND A.reference_id = 'CALI07') OR (A.ctype IN ('B_HA', 'B_NS') AND A.reference_id = 'BRISBANE60') OR (A.ctype IN ('B_MP','B_NA','B_NP', 'B_PA', 'B_PB1','B_PB2') AND A.reference_id = 'PHUKET3073')) 
+  AND A.protein = 'HA' AND A.variant_hash IS NOT NULL GROUP BY A.variant_hash, A.protein,
+  CASE WHEN T.test_subtype = "H1 swl" AND T.ag_clade LIKE "6B%" THEN "H1" 
+    WHEN T.test_subtype = "H3" AND T.ag_clade LIKE "3C%" THEN "H3" WHEN T.test_subtype = "B yam" AND T.ag_clade LIKE "Y%" THEN "Byam" 
+    WHEN T.test_subtype = "B vic" AND T.ag_clade LIKE "V%" THEN "Bvic" END 
+) cdc_tested_count_date_delim ON ((master_hash_date_delim.variant_hash = cdc_tested_count_date_delim.variant_hash) AND (master_hash_date_delim.subtype = cdc_tested_count_date_delim.subtype) AND (master_hash_date_delim.protein = cdc_tested_count_date_delim.protein)) 
+WHERE global_hash_count_date_range >= 10 AND cdc_hash_count.protein = "HA" 
+AND cdc_hash_count.variant_hash IS NOT NULL
+EXCEPT 
+select distinct variant_hash from protein_modeling.model_priority

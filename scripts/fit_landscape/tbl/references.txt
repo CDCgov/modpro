@@ -1,0 +1,7 @@
+protein	subtype	context	identifier
+HA	B vic	seasonal	cd100c5989cbc3260a32166dafbe8468
+HA	B vic	reference	cfc94b4f0d72e29b951fa181cee97deb
+HA	H1 swl	seasonal	f68965e7f8de884112af63c8f23c3340
+HA	H1 swl	reference	0fabc853f211a549336be543cdcade4e
+HA	H3	seasonal	166de14b969633ca1050f01418040896
+HA	H3	reference	141a949a4de1af652e5caef8d7a7199e
