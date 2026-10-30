@@ -71,12 +71,3 @@ Monitoring:
 Combined monitor script:
 - watches manifests/*.csv → Mondays pipeline
 - watches manifests/*.tsv → Thursdays pipeline
-
-this is where I stopped, the pipeline is monitoring for tsv and nifi can pull variant hashes.
-I created the protein_modeling.logging_qc table. 
-
-next steps:
-- finalize HA1/Rosetta
-- implement data gen scripts
-- think about whether to add NAs or keep HA specific
-- think about whether to incorporate RMSD
