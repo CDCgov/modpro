@@ -1,0 +1,6 @@
+[submodule "openfold3/openfold-3"]
+	path = openfold3/openfold-3
+	url = https://github.com/aqlaboratory/openfold-3
+[submodule "scripts/getcontacts"]
+	path = scripts/getcontacts
+	url = https://github.com/getcontacts/getcontacts

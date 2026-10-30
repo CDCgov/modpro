@@ -1,69 +1,185 @@
+#!/usr/bin/env python3
 
-#!usr/bin/env python3
-
-"""
-Usage notes:
-snakemake \
-  --snakefile Snakefile \
-  --cores 64 \
-  --printshellcmds \
-  --reason \
-  --rerun-incomplete \
-  --keep-going \
-  --latency-wait 60
-
-conda env
-```python
-conda:
-    "envs/openfold.yaml"
-```
-retries
-```python
-retries: 3
-```
-gpu usage
-```bash
-nvidia-smi | tee -a {log}
-```
-run metadata
-```bash
-date | tee -a {log}
-hostname | tee -a {log}
-env | sort | tee -a {log}
-```
-"""
 import pandas as pd
 from pathlib import Path
 import json
 import socket
 import smtplib
+import subprocess
 from email.message import EmailMessage
+from snakemake.exceptions import WorkflowError
 
 configfile: "config.yaml"
 
 EMAIL_TO = config["email"]["to"]
 EMAIL_FROM = config["email"]["from"]
+EMAIL_ON_SUCCESS = bool(config["email"].get("on_success", True))
 
-MANIFEST_DIR = config["paths"]["manifest_dir"]
+MANIFEST_DIR = config["paths"]["manifests_dir"]
 
 OPENFOLD3_ROOT = config["openfold3"]["root"]
 OPENFOLD3_SCRIPTS = config["openfold3"]["scripts_dir"]
-OPENFOLD3_MSA_DIR = config["openfold3"]["msa_dir"]
+OPENFOLD3_MSA_DIR = config["openfold3"]["msas_dir"]
 OPENFOLD3_MSA_SNAKEFILE = config["openfold3"]["msa_snakefile"]
 
-OPENFOLD_ENV = config["openfold3"]["env"]
+OPENFOLD_ENV = config["openfold3"]["openfold_env"]
 OPENFOLD_DB_PATH = config["openfold3"]["db_path"]
 
 MSA_CORES = config["monday"]["msa_cores"]
 JACKHMMER_THREADS = config["monday"]["jackhmmer_threads"]
 HHBLITS_THREADS = config["monday"]["hhblits_threads"]
-RUNNER_YAML = "config/runner.yaml"
+RUNNER_YAML = config["openfold3"]["runner_yaml"]
+
+# Seed used by runner.yml. The prediction rule verifies that the model PDB for
+# this seed exists before it marks a variant done, so these must agree.
+OPENFOLD3_SEED = int(config["openfold3"].get("seed", 42))
+
+INFERENCE_SLOTS = int(config["monday"].get("inference_slots", 1))
+MSA_SLOTS = int(config["monday"].get("msa_slots", 4))
+MIN_FREE_GPU_MIB = int(config["monday"].get("min_free_gpu_mib", 40000))
+INFERENCE_MEM_GB = int(config["monday"].get("inference_mem_gb", 100))
 
 HA_CHAIN_IDS = ["A", "B", "C"]   # trimer
 NA_CHAIN_IDS = ["A", "B", "C", "D"]   # tetramer
 QC_THRESHOLD = config["monday"]["qc_threshold"]
 
-def send_failure_email(subject, body):
+_REQUIRED_BUDGETS = {
+    "inference_slots": INFERENCE_SLOTS,
+    "msa_slots": MSA_SLOTS,
+}
+
+def _detect_gpu_count():
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "-L"], capture_output=True, text=True, timeout=10
+        ).stdout
+        return sum(1 for line in out.splitlines() if line.startswith("GPU "))
+    except Exception:
+        return None
+
+try:
+    _budgets = workflow.global_resources
+    for _name, _limit in _REQUIRED_BUDGETS.items():
+        if _name in _budgets:
+            print(f"[Snakefile-mondays] resource budget {_name}={_budgets[_name]} (from command line)")
+        else:
+            _budgets[_name] = _limit
+            print(f"[Snakefile-mondays] resource budget {_name}={_limit} (set by Snakefile)")
+except (AttributeError, TypeError) as _e:
+    raise WorkflowError(
+        "Could not install resource budgets into workflow.global_resources "
+        f"({_e!r}). This Snakemake version keeps budgets elsewhere. Launch with "
+        f"--resources inference_slots={INFERENCE_SLOTS} msa_slots={MSA_SLOTS} "
+        "or the GPU will be oversubscribed."
+    )
+
+_n_gpu = _detect_gpu_count()
+_slots = workflow.global_resources.get("inference_slots", INFERENCE_SLOTS)
+if _n_gpu is not None and _n_gpu > 0 and _slots > _n_gpu:
+    print(
+        f"[Snakefile-mondays] WARNING: inference_slots={_slots} but only "
+        f"{_n_gpu} GPU(s) visible. Predictions will share GPUs and may OOM."
+    )
+
+
+def model_pdb_path(manifest, variant):
+    return (
+        Path("results") / manifest / "openfold3" / variant / "prediction"
+        / f"{variant}_HA_trimer" / f"seed_{OPENFOLD3_SEED}"
+        / f"{variant}_HA_trimer_seed_{OPENFOLD3_SEED}_sample_1_model.pdb"
+    )
+
+def _manifest_variants(manifest):
+    variants_json = Path("results") / manifest / "variants" / "variants.json"
+    if not variants_json.exists():
+        return []
+    with open(variants_json) as handle:
+        return [r["variant_hash"] for r in json.load(handle)]
+
+def prediction_status(manifest):
+    """One dict per variant: status, error type/message, where to look."""
+    rows = []
+    for v in _manifest_variants(manifest):
+        pdir = Path("results") / manifest / "openfold3" / v / "prediction"
+        model = model_pdb_path(manifest, v)
+        done = pdir / "prediction.done"
+        snk_log = Path("results") / manifest / "logs" / f"{v}.prediction.log"
+
+        err_type, err_msg = "", ""
+        for errlog in sorted(pdir.glob("logs/predict_err_rank*.log")):
+            for line in errlog.read_text(errors="replace").splitlines():
+                if line.startswith("Error Type:"):
+                    err_type = line.split(":", 1)[1].strip()
+                elif line.startswith("Error Message:") and not err_msg:
+                    err_msg = line.split(":", 1)[1].strip()[:200]
+
+        snk_errors = []
+        if snk_log.exists():
+            snk_errors = [
+                l for l in snk_log.read_text(errors="replace").splitlines()
+                if l.startswith("ERROR:")
+            ]
+
+        if model.exists() and model.stat().st_size > 0:
+            status = "ok"
+        elif done.exists():
+            status = "STALE_DONE_NO_MODEL"
+        elif err_type or snk_errors:
+            status = "FAILED"
+        elif pdir.exists():
+            status = "INCOMPLETE"
+        else:
+            status = "NOT_RUN"
+
+        rows.append({
+            "variant": v,
+            "status": status,
+            "error_type": err_type,
+            "error_message": err_msg or (snk_errors[-1] if snk_errors else ""),
+            "snakemake_log": str(snk_log),
+            "model_pdb": str(model),
+            "done_marker": str(done),
+        })
+    return rows
+
+def write_prediction_report(manifest, rows=None):
+    rows = prediction_status(manifest) if rows is None else rows
+    # NB: "report" is a reserved Snakemake directive; never use it as a name.
+    report_path = Path("results") / manifest / "openfold3" / "prediction_report.tsv"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    cols = ["variant", "status", "error_type", "error_message",
+            "snakemake_log", "model_pdb"]
+    with open(report_path, "w") as out:
+        out.write("\t".join(cols) + "\n")
+        for r in rows:
+            out.write("\t".join(str(r[c]).replace("\t", " ") for c in cols) + "\n")
+    return report_path
+
+def format_report(manifest, rows):
+    n_ok = sum(r["status"] == "ok" for r in rows)
+    lines = [f"Manifest {manifest}: {n_ok}/{len(rows)} variants have a model"]
+    for r in rows:
+        if r["status"] == "ok":
+            continue
+        line = f"  {r['variant']}  {r['status']}"
+        if r["error_type"]:
+            line += f"  [{r['error_type']}]"
+        if r["error_message"]:
+            line += f"  {r['error_message']}"
+        lines.append(line)
+        lines.append(f"      log: {r['snakemake_log']}")
+    return "\n".join(lines)
+
+def manifests_in_flight():
+    """Manifests that have been split but not yet marked complete."""
+    out = []
+    for vj in sorted(Path("results").glob("*/variants/variants.json")):
+        manifest = vj.parent.parent.name
+        if not (Path("results") / manifest / "openfold3" / "manifest.done").exists():
+            out.append(manifest)
+    return out
+
+def send_email(subject, body):
     msg = EmailMessage()
     msg["To"] = EMAIL_TO
     msg["From"] = EMAIL_FROM
@@ -71,32 +187,69 @@ def send_failure_email(subject, body):
     msg.set_content(body)
     with smtplib.SMTP("localhost") as smtp:
         smtp.send_message(msg)
-onerror:
-    subject = "[modpro] Snakemake OpenFold3 pipeline failed"
-    body = f"""
-Snakemake pipeline failed.
-Host:
-{socket.gethostname()}
-Snakefile:
-{workflow.snakefile}
-Working directory:
-{Path.cwd()}
-Error:
-{error}
-Centralized logs:
-results/<manifest>/logs/
-"""
+
+def _snakemake_log_tail(log, n=100):
     try:
-        send_failure_email(subject, body)
+        return "\n".join(Path(log).read_text(errors="replace").splitlines()[-n:])
+    except Exception as e:
+        return f"(could not read snakemake log {log}: {e})"
+
+onerror:
+    reports = []
+    for manifest in manifests_in_flight():
+        try:
+            rows = prediction_status(manifest)
+            write_prediction_report(manifest, rows)
+            reports.append(format_report(manifest, rows))
+        except Exception as e:
+            reports.append(f"Manifest {manifest}: could not build report ({e})")
+    body = f"""
+Snakemake Monday pipeline FAILED.
+
+Host:              {socket.gethostname()}
+Snakefile:         {workflow.snakefile}
+Working directory: {Path.cwd()}
+Snakemake log:     {log}
+
+Per-variant status (also in results/<manifest>/openfold3/prediction_report.tsv):
+{chr(10).join(reports) if reports else '(no manifests in flight)'}
+
+Last 100 lines of snakemake log:
+{_snakemake_log_tail(log)}
+"""
+    print(body)
+    try:
+        send_email("[modpro] Snakemake OpenFold3 Monday pipeline FAILED", body)
     except Exception as e:
         print(f"Failed to send failure email: {e}")
+
+onsuccess:
+    if EMAIL_ON_SUCCESS:
+        reports = []
+        for report_path in sorted(Path("results").glob("*/openfold3/prediction_report.tsv")):
+            manifest = report_path.parent.parent.name
+            rows = prediction_status(manifest)
+            reports.append(format_report(manifest, rows))
+        body = f"""
+Snakemake Monday pipeline finished without errors.
+
+Host:              {socket.gethostname()}
+Working directory: {Path.cwd()}
+Snakemake log:     {log}
+
+{chr(10).join(reports) if reports else '(no prediction reports found)'}
+"""
+        try:
+            send_email("[modpro] Snakemake OpenFold3 Monday pipeline complete", body)
+        except Exception as e:
+            print(f"Failed to send success email: {e}")
 
 #one rule to rule them all
 rule all:
     input:
         []
 
-# break up manifest to single aa seq per fasta 
+# break up manifest to single aa seq per fasta
 checkpoint split_manifest:
     input:
         manifest = f"{MANIFEST_DIR}/{{manifest}}.csv"
@@ -170,7 +323,7 @@ def all_prediction_done(wildcards):
         manifest=wildcards.manifest,
         variant=variants
     )
- 
+
 # msa configs
 rule create_msa_config:
     input:
@@ -211,6 +364,7 @@ rule run_openfold3_msa:
         "results/{manifest}/logs/{variant}.msa.log"
     shell:
         """
+        module load cuda
         mkdir -p results/{wildcards.manifest}/logs
         {{
           echo "msa generation starting"
@@ -275,7 +429,8 @@ rule create_query_json:
         Path(output.query_json).parent.mkdir(parents=True, exist_ok=True)
         with open(output.query_json, "w") as out:
             json.dump(query, out, indent=2)
-# run of3 inference
+
+
 rule run_openfold3_prediction:
     input:
         query_json = "results/{manifest}/openfold3/{variant}/query.json"
@@ -283,9 +438,13 @@ rule run_openfold3_prediction:
         done = "results/{manifest}/openfold3/{variant}/prediction/prediction.done"
     params:
         output_dir = "results/{manifest}/openfold3/{variant}/prediction",
-        runner_yaml = RUNNER_YAML
+        runner_yaml = RUNNER_YAML,
+        model_pdb = lambda wc: str(model_pdb_path(wc.manifest, wc.variant)),
+        min_free_gpu_mib = MIN_FREE_GPU_MIB
+    threads: 1
     resources:
-        inference_slots = 1
+        inference_slots = 1,
+        mem_gb = INFERENCE_MEM_GB
     log:
         "results/{manifest}/logs/{variant}.prediction.log"
     shell:
@@ -296,25 +455,80 @@ rule run_openfold3_prediction:
           echo "starting inference"
           date
           hostname
+          source activate /scicomp/groups/ID-VSDB/GAT/shared_conda_envs/of3-inf-env
+          module load cuda
           echo "manifest={wildcards.manifest}"
           echo "variant={wildcards.variant}"
           echo "query_json={input.query_json}"
           echo "output_dir={params.output_dir}"
           echo "runner_yaml={params.runner_yaml}"
+          echo "expected_model={params.model_pdb}"
           echo "pwd=$(pwd)"
           echo "GPU?"
           nvidia-smi || true
           env | sort
         }} >> {log} 2>&1
 
+        # --- GPU pre-flight -------------------------------------------------
+        min_free={params.min_free_gpu_mib}
+        if command -v nvidia-smi >/dev/null 2>&1; then
+          free_mib=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ')
+          {{
+            echo "gpu_free_mib=${{free_mib:-unknown}} (minimum required: ${{min_free}})"
+            echo "compute processes currently on the GPU:"
+            nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv 2>/dev/null || echo "(none / unavailable)"
+          }} >> {log} 2>&1
+          if [ -n "${{free_mib}}" ] && [ "${{free_mib}}" -lt "${{min_free}}" ]; then
+            echo "ERROR: GPU has only ${{free_mib}} MiB free, below the ${{min_free}} MiB one prediction needs. Something else is on the GPU (see list above). Not starting variant {wildcards.variant}." >> {log}
+            exit 1
+          fi
+        fi
+
+        export PYTORCH_ALLOC_CONF=expandable_segments:True
+
+        # --- run ------------------------------------------------------------
+        prediction_exit_code=0
         run_openfold predict \
           --query_json {input.query_json} \
           --use_msa_server=False \
           --output_dir {params.output_dir} \
           --runner_yaml {params.runner_yaml} \
-          >> {log} 2>&1
+          >> {log} 2>&1 || prediction_exit_code=$?
+
         {{
-          echo "inference complete"
+          echo "run_openfold exited with code ${{prediction_exit_code}}"
+          date
+        }} >> {log} 2>&1
+
+        # --- collect per-query error logs OpenFold3 may have written --------
+        for f in {params.output_dir}/logs/predict_err_rank*.log; do
+          if [ -f "$f" ]; then
+            {{
+              echo "--- per-query error log: $f ---"
+              cat "$f"
+              echo "--- end $f ---"
+            }} >> {log} 2>&1
+          fi
+        done
+
+        if [ "${{prediction_exit_code}}" -ne 0 ]; then
+          echo "ERROR: run_openfold failed with exit code ${{prediction_exit_code}} for variant {wildcards.variant}" >> {log}
+          exit "${{prediction_exit_code}}"
+        fi
+
+        # --- done means a model exists; nothing else counts -----------------
+        if [ ! -s {params.model_pdb} ]; then
+          {{
+            echo "ERROR: run_openfold exited 0 but produced no model for variant {wildcards.variant}"
+            echo "ERROR: expected {params.model_pdb}"
+            echo "--- summary.txt ---"
+            cat {params.output_dir}/summary.txt 2>/dev/null || echo "(no summary.txt)"
+          }} >> {log} 2>&1
+          exit 1
+        fi
+
+        {{
+          echo "inference complete: {params.model_pdb}"
           date
         }} >> {log} 2>&1
         touch {output.done}
@@ -327,11 +541,35 @@ rule manifest_msa_complete:
         done = "results/{manifest}/openfold3/msa.done"
     shell:
         "touch {output.done}"
-#check for completion - inference
+
+# check for completion - inference
+
 rule manifest_prediction_complete:
     input:
         all_prediction_done
     output:
         done = "results/{manifest}/openfold3/manifest.done"
-    shell:
-        "touch {output.done}"
+    run:
+        rows = prediction_status(wildcards.manifest)
+        report_path = write_prediction_report(wildcards.manifest, rows)
+        bad = [r for r in rows if r["status"] != "ok"]
+        if bad:
+            removed = []
+            for r in bad:
+                if r["status"] == "STALE_DONE_NO_MODEL":
+                    Path(r["done_marker"]).unlink(missing_ok=True)
+                    removed.append(r["variant"])
+            msg = [
+                f"Manifest {wildcards.manifest}: {len(bad)} of {len(rows)} variants have no model.",
+                f"Report: {report_path}",
+                format_report(wildcards.manifest, rows),
+            ]
+            if removed:
+                msg.append(
+                    f"Deleted {len(removed)} stale prediction.done marker(s) with no model behind them: "
+                    + ", ".join(removed)
+                )
+                msg.append("Rerun the same snakemake command to regenerate those variants.")
+            raise WorkflowError("\n".join(msg))
+        Path(output.done).touch()
+

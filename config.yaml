@@ -2,40 +2,150 @@ paths:
   workflow_dir: "/scicomp/groups/modpro"
 
   manifests_dir: "manifests"
-  rosetta_manifests_dir: "manifests/rosetta_runs"
-
   results_dir: "results"
   logging_qc_dir: "results/logging_qc"
-  final_dir: "results/final"
-  thursday_work_dir: "results/thursday"
-
-  scripts_dir: "scripts"
-
-  rosetta_ready_dir: "/scicomp/groups/modpro/rosetta_ready"
-  refs_dir: "/scicomp/groups/modpro/rosetta_ready/refs"
+  staging_dir: "/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging"
+  pipeline_scripts_dir: "/scicomp/groups/modpro/scripts"
+  refs_dir: "refs"
 
 openfold3:
-  root: "/scicomp/groups/modpro/openfold3"
+  root: "openfold3"
+
+  jsons_dir: "openfold3/jsons"
+  fastas_dir: "openfold3/fastas"
+  msas_dir: "openfold3/msas"
+
+  source_dir: "/scicomp/groups/modpro/openfold3/openfold-3"
   scripts_dir: "/scicomp/groups/modpro/openfold3/openfold-3/scripts"
-  msa_dir: "/scicomp/groups/modpro/openfold3/openfold-3/scripts/snakemake_msa"
+  msa_workflow_dir: "/scicomp/groups/modpro/openfold3/openfold-3/scripts/snakemake_msa"
   msa_snakefile: "/scicomp/groups/modpro/openfold3/openfold-3/scripts/snakemake_msa/MSA_Snakefile"
-  env: "/scicomp/groups/ID-VSDB/GAT/shared_conda_envs/of3-aln-env"
+
+  openfold_env: "/scicomp/groups/ID-VSDB/GAT/shared_conda_envs/of3-aln-env"
   db_path: "/scicomp/groups/ID-VSDB/GAT/of3_dbs"
 
-rosetta:
-  bin_dir: "/scicomp/groups/ID-VSDB/GAT/rosetta.binary.linux.release-371/main/source"
+  runner_yaml: "openfold3/runner.yml"
+  runner_lowmem_yaml: "openfold3/runner_lowmem.yml"
 
+  seed: 42
+  sample: 1
+
+  inputs:
+    fasta: "openfold3/fastas/{variant_hash}.fasta"
+    msa_config_json: "openfold3/jsons/{variant_hash}.msa_config.json"
+    query_json: "openfold3/jsons/{variant_hash}.query.json"
+
+  msa_outputs:
+    root: "openfold3/msas/{variant_hash}"
+    done: "openfold3/msas/{variant_hash}/msa.done"
+    log: "openfold3/msas/{variant_hash}/msa.log"
+
+  outputs:
+    prediction_dir: "results/{run_id}/openfold3/{variant_hash}/prediction"
+    seed_dir: "results/{run_id}/openfold3/{variant_hash}/{variant_hash}_HA_trimer/seed_42"
+    collated_data_parquet: "results/{run_id}/collated_data.parquet"
+    model_pdb: "results/{run_id}/openfold3/{variant_hash}/prediction/{variant_hash}_HA_trimer/seed_42/{variant_hash}_HA_trimer_seed_42_sample_1_model.pdb"
+    confidences_json: "results/{run_id}/openfold3/{variant_hash}/prediction/{variant_hash}/seed_42/{variant_hash}_seed_42_sample_1_confidences.json"
+    confidences_aggregated_json: "results/{run_id}/openfold3/{variant_hash}/prediction/{variant_hash}/seed_42/{variant_hash}_seed_42_sample_1_confidences_aggregated.json"
+    timing_json: "results/{run_id}/openfold3/{variant_hash}/prediction/{variant_hash}/seed_42/timing.json"
+    structure_done: "results/{run_id}/openfold3/{variant_hash}/prediction/structure.done"
+
+  logs:
+    prediction_log: "results/logging_qc/{run_id}/{variant_hash}.prediction.log"
+
+  run_markers:
+    msa_done: "results/{run_id}/openfold3/msa.done"
+    manifest_done: "results/{run_id}/openfold3/manifest.done"
+
+rosetta:
+  bin_dir: "/scicomp/groups/ID-VSDB/GAT/rosetta.binary.linux.release-371/main/source/bin"
   relax_binary: "relax.static.linuxgccrelease"
   relax_thread_binary: "relax.cxx11thread.linuxgccrelease"
+  score_binary: "score.static.linuxgccrelease"
 
-  pocket_relax_binary: "pocket_relax.static.linuxgccrelease"
-  pocket_relax_thread_binary: "pocket_relax.cxx11thread.linuxgccrelease"
+  outputs:
+    rosetta_ready_dir: "results/{run_id}/rosetta_ready"
+    rosetta_ready_pdb: "results/{run_id}/rosetta_ready/{variant_hash}.pdb"
 
-  scripts_binary: "rosetta_scripts.static.linuxgccrelease"
-  scripts_thread_binary: "rosetta_scripts.cxx11thread.linuxgccrelease"
+    scores_dir: "results/{run_id}/rosetta/{variant_hash}/scores"
+    rosetta_score_done: "results/{run_id}/rosetta/{variant_hash}/scores/rosetta_score.done"
 
-  scripts_jd3_binary: "rosetta_scripts_jd3.static.linuxgccrelease"
-  scripts_jd3_thread_binary: "rosetta_scripts_jd3.cxx11thread.linuxgccrelease"
+    relax_dir: "results/{run_id}/rosetta/{variant_hash}/relax"
+    relaxed_pdb: "results/{run_id}/rosetta/{variant_hash}/relax/{variant_hash}.pdb"
+
+    best_energy_dir: "results/{run_id}/rosetta/{variant_hash}/best_energy"
+    best_energy_ha1_pdb: "results/{run_id}/rosetta/{variant_hash}/best_energy/{variant_hash}_best_energy_ha1.pdb"
+
+  logs:
+    extract_chain_ha1_log: "results/logging_qc/{run_id}/{variant_hash}.extract_chainA_HA1.log"
+    rosetta_score_log: "results/logging_qc/{run_id}/{variant_hash}.rosetta_score.log"
+    score_static_file: "results/logging_qc/{run_id}/{variant_hash}.score_static.sc"
+    score_jd2_file: "results/logging_qc/{run_id}/{variant_hash}.score_jd2.sc"
+    relax_log: "results/logging_qc/{run_id}/{variant_hash}.relax.log"
+    relaxed_score_log: "results/logging_qc/{run_id}/{variant_hash}.relaxed_score.log"
+    relaxed_score_file: "results/logging_qc/{run_id}/{variant_hash}.relaxed_score.sc"
+    best_energy_log: "results/logging_qc/{run_id}/{variant_hash}.best_energy_ha1.log"
+    best_energy_inner_log: "results/logging_qc/{run_id}/{variant_hash}.best_HA.inner.log"
+    best_energy_decision: "results/logging_qc/{run_id}/{variant_hash}_best_energy_ha1.tsv"
+    residue_energy_raw: "results/logging_qc/{run_id}/{variant_hash}.res_breakdown.txt"
+    collate_data_log: "results/logging_qc/{run_id}/rules/collate_data.log"
+
+characterization:
+  root: "results/{run_id}/characterization/{variant_hash}"
+
+  outputs:
+    plddt_dir: "results/{run_id}/characterization/{variant_hash}/plddt"
+    plddt: "results/{run_id}/characterization/{variant_hash}/plddt/{variant_hash}.plddt.parquet"
+
+    reference_compare_dir: "results/{run_id}/characterization/{variant_hash}/reference_compare"
+    reference_compare: "results/{run_id}/characterization/{variant_hash}/reference_compare/{variant_hash}.reference_compare.tsv"
+
+    residue_energy_dir: "results/{run_id}/characterization/{variant_hash}/residue_energy"
+    residue_energy_tsv: "results/{run_id}/characterization/{variant_hash}/residue_energy/{variant_hash}.per_res_scorefile.tsv"
+    residue_energy_parquet: "results/{run_id}/characterization/{variant_hash}/residue_energy/{variant_hash}.per_res_scorefile.parquet"
+
+    glycosylation_distance_dir: "results/{run_id}/characterization/{variant_hash}/glycosylation_distance"
+    glycosylation_distance: "results/{run_id}/characterization/{variant_hash}/glycosylation_distance/{variant_hash}.txt"
+    glycosylation_distance_parquet: "results/{run_id}/characterization/{variant_hash}/glycosylation_distance/{variant_hash}.glyc_distance.parquet"
+
+    structural_distance_dir: "results/{run_id}/characterization/{variant_hash}/structural_distance"
+    structural_distance_heavy: "results/{run_id}/characterization/{variant_hash}/structural_distance/{variant_hash}_heavy.txt"
+    structural_distance_calpha: "results/{run_id}/characterization/{variant_hash}/structural_distance/{variant_hash}_calpha.txt"
+    structural_distance_carbon: "results/{run_id}/characterization/{variant_hash}/structural_distance/{variant_hash}_carbon.txt"
+
+    getcontacts_dir: "results/{run_id}/characterization/{variant_hash}/getcontacts"
+    getcontacts_raw: "results/{run_id}/characterization/{variant_hash}/getcontacts/{variant_hash}.static_contacts.csv"
+    getcontacts_clean: "results/{run_id}/characterization/{variant_hash}/getcontacts/{variant_hash}.getcontacts.csv"
+    getcontacts_parquet: "results/{run_id}/characterization/{variant_hash}/getcontacts/{variant_hash}.getcontacts.parquet"
+
+    fitscape_dir: "results/{run_id}/characterization/{variant_hash}/fitscape"
+    fitscape: "results/{run_id}/characterization/{variant_hash}/fitscape/{variant_hash}.txt"
+
+    epitope_calculation_dir: "results/{run_id}/characterization/{variant_hash}/epitope_calculation"
+    epitope_calculation: "results/{run_id}/characterization/{variant_hash}/epitope_calculation/{variant_hash}_epitope.tsv"
+    epitope_calculation_parquet: "results/{run_id}/characterization/{variant_hash}/epitope_calculation/{variant_hash}_epitope.parquet"
+
+    variant_done: "results/{run_id}/characterization/{variant_hash}/variant.done"
+
+logging:
+  root: "results/logging_qc/{run_id}"
+
+  run_logs:
+    variant_list: "results/logging_qc/{run_id}/variant_list.tsv"
+    write_variant_list_log: "results/logging_qc/{run_id}/write_variant_list.log"
+    thursday_complete_log: "results/logging_qc/{run_id}/thursday_complete.log"
+
+  rule_logs:
+    plddt_log: "results/logging_qc/{run_id}/{variant_hash}.plddt.log"
+    reference_compare_log: "results/logging_qc/{run_id}/{variant_hash}.reference_compare.log"
+    residue_energy_breakdown_log: "results/logging_qc/{run_id}/{variant_hash}.residue_energy_breakdown.log"
+    glycan_distance_log: "results/logging_qc/{run_id}/{variant_hash}.glycan_distance.log"
+    structural_distance_log: "results/logging_qc/{run_id}/{variant_hash}.structural_distance.log"
+    getcontacts_log: "results/logging_qc/{run_id}/{variant_hash}.getcontacts.log"
+    epitope_exposure_log: "results/logging_qc/{run_id}/{variant_hash}.epitope_exposure.log"
+    variant_complete_log: "results/logging_qc/{run_id}/{variant_hash}.variant_complete.log"
+
+run_markers:
+  thursday_done: "results/{run_id}/thursday.done"
 
 email:
   to: "qxa4@cdc.gov"
@@ -45,38 +155,42 @@ monday:
   msa_cores: 32
   jackhmmer_threads: 16
   hhblits_threads: 32
+
   chain_ids:
     HA: ["A", "B", "C"]
     NA: ["A", "B", "C", "D"]
+
   qc_threshold: 75.0
-  runner_yaml: "config/runner.yaml"
+  max_reruns: 2
 
 thursday:
   cores: 32
 
 refs:
+  root: "refs"
+
   subtypes:
     H1:
-      reference: "H1_HA_reference.pdb"
-      seasonal: "H1_HA_seasonal.pdb"
+      reference: "refs/H1_HA_reference.pdb"
+      seasonal: "refs/H1_HA_seasonal.pdb"
       ha1_start: 18
       ha1_end: 344
 
     H3:
-      reference: "H3_HA_reference.pdb"
-      seasonal: "H3_HA_seasonal.pdb"
+      reference: "refs/H3_HA_reference.pdb"
+      seasonal: "refs/H3_HA_seasonal.pdb"
       ha1_start: 17
       ha1_end: 345
 
     Bvic:
-      reference: "B_HA_reference.pdb"
-      seasonal: "B_HA_seasonal.pdb"
+      reference: "refs/B_HA_reference.pdb"
+      seasonal: "refs/B_HA_seasonal.pdb"
       ha1_start: 16
       ha1_end: 362
 
     H5:
-      reference: "H5_HA_reference.pdb"
-      seasonal: "H5_HA_seasonal.pdb"
+      reference: "refs/H5_HA_reference.pdb"
+      seasonal: "refs/H5_HA_seasonal.pdb"
       ha1_start:
       ha1_end:
 
@@ -108,3 +222,4 @@ subtype_aliases:
     - H5
     - H5N1
     - H5Nx
+
