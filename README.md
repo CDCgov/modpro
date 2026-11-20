@@ -31,18 +31,18 @@ kill:
 Ctrl-c
 ```
 
-Monday/OpenFold3 pipeline is triggered when Nifi generates a manifest ending in .csv: [Nifi Monday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/881e3d30-341b-1bdc-a753-bbe492b171d4) pulls variant hashes from REFSYS and generates manifest, posted to `/scicomp/groups/modpro/manifests` triggering openfold3 job managed by snakemake.
+GPU/OpenFold3 pipeline is triggered when Nifi generates a manifest ending in .csv: [Nifi GPU pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/881e3d30-341b-1bdc-a753-bbe492b171d4) pulls variant hashes from REFSYS and generates manifest, posted to `/scicomp/groups/modpro/manifests` triggering openfold3 job managed by snakemake.
 
-Thursday/Rosetta pipeline triggered by Nifi generating a manifest ending in .tsv automatically every Thursday in: `/scicomp/groups/modpro/manifests/rosetta_runs/`. [Nifi Thursday pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/ed5534dd-55d1-1bce-bb46-805f7879ce50) runs characterization and copies parquet file output to the staging area `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` for pickup by the Nifi [protein modeling post pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/416d35ee-136d-164d-8b00-8c9645776218/Processor/d0c93509-42e2-1dd7-a766-d5259d7deeb8)
+CPU/Rosetta pipeline triggered by Nifi generating a manifest ending in .tsv automatically when new files are detected in `/scicomp/groups/modpro/manifests/rosetta_runs/`. [Nifi CPU pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/ed5534dd-55d1-1bce-bb46-805f7879ce50) runs characterization and copies parquet file output to the staging area `/scicomp/groups/ID-VSDB/GAT/protein_modeling/staging` for pickup by the Nifi [protein modeling post pipeline](https://cdp-util-02.biotech.cdc.gov:8443/nifi/?processGroupId=9cb93692-18d9-1618-a24c-d1d7fc23c357&componentIds=#/process-groups/416d35ee-136d-164d-8b00-8c9645776218/Processor/d0c93509-42e2-1dd7-a766-d5259d7deeb8)
 
 Protein models are prioritized in a SQL statement that writes to the `protein_modeling.model_priority` table. The SQL can be found in this repo under `model_priority.sql` and updates from the Nifi Mondays pipeline on a Monday cron at 7am. The top 10 variant hashes that are not already modeled according to PASS in the `protein_modeling.logging` and `protein_modeling.qc` tables. This SQL can be found in this repo under `variant_pull.sql` and is run Mondays at 8am as part of the Monday Nifi pipeline.
 
-DAGs for the Monday/Thursday Snakemake pipelines:
+DAGs for the GPU/CPU Snakemake pipelines:
 
-## Monday's DAG
+## GPU DAG
 ![Monday pipeline DAG](dag_openfold3_f02725056edb1e308c7da494f103ab52.svg)
 
-## Thursday's DAG
+## CPU DAG
 ![Thursday pipeline DAG](dag_f02725056edb1e308c7da494f103ab52.svg)
 
 
@@ -145,7 +145,7 @@ Pass/Fail defined as:
 
 ## Weekly Variant Structural Prediction Pipeline Flow
 Updated Process Flow:
-Automated SQL queries against ref_sys database to identify high-priority variants (deduplication checks against existing protein_modeling entries)  
+Automated SQL queries against `ref_sys` database to identify high-priority variants (deduplication checks against existing protein_modeling entries)  
 Submission to OpenFold3 for structure prediction
 HA1 domain extraction, optimization by rosetta relaxation protocols for energy minimization (energy optimization enforcement for relaxed structures)
 Comprehensive logging and audit trails, error handling with retry mechanisms
@@ -157,7 +157,10 @@ Inference balances the need for comprehensive coverage with statistical rigor, e
 ## Enhanced RBS Epitope Analysis
 Epitope prediction tool represents integration of structural biology and immunology principles. The 15 Angstrom distance criterion is large enough to capture the full span of conformational epitopes while remaining within the physical reach of antibody binding domains. Inclusion of both surface accessibility and glycosylation analysis filter out sites without antibody accessibility. The centroid-based approach is especially valuable for RBS analysis since this region is the most functionally and immunologically important site for antigenic drift. 
 
-## Sialic Acid Binding Site Analysis: <dev mode>
+## Ensemble Glycan Modeling
+Rosetta glycosylates the relaxed HA1 models and generates multiple (5+) conformers per pdb, the results of which can generate an "ensemble" of structures representing the most likely shielding patterns if that site is occupied by Man5, the most prevalent glycan found on HA proteins. The visualization app compares structures to vaccine strains, other variants and can output a table of changes in predicted shielding state per residue. 
+
+## Sialic Acid Binding Site Analysis: <dev mode, not yet implemented>
 Optimized Boltzmann scoring, benchmarks
 Database Schema Optimization: Remove deprecated tables and implement new analytical structures and optimize join strategies 
 HA1 Domain Focus: Transition from full HA to HA1-specific modeling
@@ -176,6 +179,10 @@ test - Development/testing artifacts
 `protein_modeling.logging` - parses log files for completed steps, if all successful, `status` = SUCCESS otherwise the variant is FAILED and rerun.
 
 `protein_modeling.qc` - sanity check summary for variants passed through pipeline, collates data from energy scores before and after Rosetta relaxation, reports RMS and Maxsub values relative to subtype-specific variants, average pLDDT for the HA1. 
+
+`protein_modeling.glycan_models` - includes information on rosetta glycosylation run settings, models etc.
+
+`protein_modeling.glycan_residues` - includes per-residue data on glycan conformer positions for ensemble viz purposes
 
 Sialic acid binding predictions in dev [off mode until benchmarks passed], see dokken repo for a pilot example. 
 
