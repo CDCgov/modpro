@@ -192,8 +192,7 @@ Transitioning from full HA to HA1-focused analysis represents a strategic shift 
 ## Computational Efficiency
 Smaller domain size enables higher resolution analysis as well as containing the region with the highest pLDDT values (highest confidence) for more reliable analysis.
 
-## This pipeline generates biophysical information on each structure and includes the following, in addition to more granular features :
-
+## This pipeline generates biophysical information on each structure and includes the following <in addition to more granular features>
 ## Qualitative Metrics
 - Rosetta Energy Scores, total and per-residue (a measure of relative stability of protein in question)
 - Root mean square difference - RMS and MaxSub (a scoring of the deviation in alignment between the protein and a reference structure)
@@ -202,6 +201,7 @@ Smaller domain size enables higher resolution analysis as well as containing the
 ##  Biophysical Properties Calculators (CDC-generated)
 - Glycosylation distance calculator
 - RBS epitopes prediction calculator
+- Glycan Ensemble viewer
 - Structural distance calculator for generating fitness landscapes <https://git.biotech.cdc.gov/hxa6/fit_landscape>
 
 ## Full Workflow Diagram
@@ -220,7 +220,7 @@ flowchart TB
     classDef report fill:#F3F0FF,stroke:#7C3AED,stroke-width:1.5px,color:#1F2937;
 
     %% =====================================================
-    %% ORCHESTRATION
+    %% Workflow
     %% =====================================================
     subgraph A["Structural Bioinformatics Workflow"]
         direction LR
@@ -234,7 +234,7 @@ flowchart TB
     end
 
     %% =====================================================
-    %% MODELING
+    %% Modeling
     %% =====================================================
     subgraph B["Snakemake Workflow Part1"]
         direction LR
@@ -283,13 +283,14 @@ flowchart TB
         C2["GetContacts"]
         C3["FITscape"]
         C4["Centroid prediction and RBS residues"]
-        C1 --> C2 --> C3 --> C4
+        C5["Glycan Ensemble Generation"]
+        C1 --> C2 --> C3 --> C4 --> C5
     end
 
     %% =====================================================
     %% OBSERVABILITY / DELIVERY
     %% =====================================================
-    subgraph D["Observability and Delivery"]
+    subgraph D["Quality Control and Oversight/Reporting"]
         direction LR
         D1["Logging"]
         D2["Run reporting"]
@@ -314,7 +315,7 @@ flowchart TB
     A6 --> B1a
     B3b --> E1
     B3f --> C1
-    C4 --> D1
+    C5 --> D1
     D3 --> E2
     D4 --> E3
     D5 --> E2
@@ -324,7 +325,7 @@ flowchart TB
     %% =====================================================
     class A1,A2,A3,A4,A5,A6,D3,D4 nifi;
     class B1a,B1b,B1c,B1d,B2a,B2b,B2c,B2e,B3a,B3b,B3c,B3d,B3e,B3f model;
-    class C1,C2,C3,C4 analytic;
+    class C1,C2,C3,C4,C5 analytic;
     class E1,E2,E3 store;
     class B2d decision;
     class D1,D2,D5 report;
@@ -361,7 +362,7 @@ Durations are wall clock from each log's own start and completion timestamps.
 |---|---|---|---:|---:|
 | MSA | 2 concurrent | `--resources msa_slots=2` | 19m48s | 9m54s |
 | Prediction | 1 concurrent | `--resources inference_slots=1` | 6m38s | 6m38s |
-| Rosetta chain | cores available | `THURSDAY_CORES=32` | 16m47s | varies with width |
+| Rosetta chain | cores available | `CPU_CORES=32` | 16m47s | varies with width |
 
 ## Privacy Standard Notice
 
